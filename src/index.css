@@ -1,0 +1,188 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,200;0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@theme {
+  /* Warm cream editorial — single design language across public site and portals */
+  --color-background: #F6F1E9;
+  --color-surface: #EFE9DC;
+  --color-elevated: #E8E2D2;
+  --color-card: #E8E4DC;
+  --color-card-hover: #F0ECE4;
+  --color-border: #DDD4C2;
+  --color-border-strong: #C8C0AE;
+  --color-border-cream: #C8C4BC;
+  --color-text-primary: #2C1A0E;
+  --color-text-secondary: #5C4A38;
+  --color-text-muted: #9C8870;
+  --color-text-dark: #1A1A1A;
+  --color-text-dark-secondary: #4A4A4A;
+  --color-ink: #2C1A0E;
+  --color-ink-soft: #3C2A1A;
+  --color-bronze: #7A4A28;
+  --color-accent: #E8593C;
+  --color-accent-dim: #9B3A26;
+  --color-success: #1E8A4C;
+  --color-warning: #B07310;
+  --color-danger: #C2382A;
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-display: 'DM Sans', 'Inter', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: auto;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--color-background);
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Anduril-style clipped corner card */
+.clip-corner {
+  clip-path: polygon(0 0, calc(100% - 28px) 0, 100% 28px, 100% 100%, 0 100%);
+}
+.clip-corner-sm {
+  clip-path: polygon(0 0, calc(100% - 16px) 0, 100% 16px, 100% 100%, 0 100%);
+}
+.clip-corner-lg {
+  clip-path: polygon(0 0, calc(100% - 40px) 0, 100% 40px, 100% 100%, 0 100%);
+}
+
+/* Horizontal scroll rows without a visible scrollbar */
+.scrollbar-none {
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+/* Grain / film noise texture */
+.grain {
+  position: relative;
+}
+.grain::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='1'/%3E%3C/svg%3E");
+  background-size: 200px 200px;
+  opacity: 0.028;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Hairline grid overlay for hero sections */
+.grid-overlay {
+  background-image:
+    linear-gradient(rgba(44, 26, 14, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(44, 26, 14, 0.04) 1px, transparent 1px);
+  background-size: 60px 60px;
+}
+
+/* Scanline overlay */
+.scanlines::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 0, 0, 0.04) 2px,
+    rgba(0, 0, 0, 0.04) 4px
+  );
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* Number count up animation */
+@keyframes count-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Marquee */
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+.marquee-track {
+  animation: marquee 32s linear infinite;
+}
+.marquee-track:hover {
+  animation-play-state: paused;
+}
+
+/* Accent corner decoration — visible triangle for clipped cards */
+.clip-corner-accent {
+  position: relative;
+}
+.clip-corner-accent::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 28px;
+  height: 28px;
+  background: linear-gradient(225deg, var(--color-border-cream) 50%, transparent 50%);
+  pointer-events: none;
+}
+
+/* 3D Transform utilities */
+.perspective-1000 {
+  perspective: 1000px;
+}
+.preserve-3d {
+  transform-style: preserve-3d;
+}
+
+/* Floating fabric animation */
+@keyframes float-fabric {
+  0%, 100% { transform: translateY(0) rotateX(0deg); }
+  50% { transform: translateY(-10px) rotateX(2deg); }
+}
+.animate-float-fabric {
+  animation: float-fabric 4s ease-in-out infinite;
+}
+
+/* Subtle pulse glow */
+@keyframes pulse-glow {
+  0%, 100% { opacity: 0.4; transform: scale(1); }
+  50% { opacity: 0.7; transform: scale(1.05); }
+}
+.animate-pulse-glow {
+  animation: pulse-glow 3s ease-in-out infinite;
+}
+
+/* Fabric layer hover effect */
+@keyframes fabric-wave {
+  0%, 100% { transform: rotateX(60deg) rotateZ(-15deg) translateY(0); }
+  50% { transform: rotateX(58deg) rotateZ(-13deg) translateY(-5px); }
+}
+
+/* Smooth scroll snap */
+.scroll-snap-y {
+  scroll-snap-type: y mandatory;
+}
+.scroll-snap-start {
+  scroll-snap-align: start;
+}
+
+/* Text gradient */
+.text-gradient-accent {
+  background: linear-gradient(135deg, var(--color-accent) 0%, #ff7a5c 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}

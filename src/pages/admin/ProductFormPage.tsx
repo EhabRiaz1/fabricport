@@ -68,6 +68,8 @@ export default function ProductFormPage() {
   const [priceMinPkr, setPriceMinPkr] = useState('')
   const [priceMaxPkr, setPriceMaxPkr] = useState('')
   const [images, setImages] = useState<string[]>([])
+  const [videoUrl, setVideoUrl] = useState('')
+  const [uploadingVideo, setUploadingVideo] = useState(false)
   const [attributeValues, setAttributeValues] = useState<AttributeValues>({})
   const [color, setColor] = useState<ColorSamplerValue>({
     color_supplier_name: null,
@@ -139,6 +141,7 @@ export default function ProductFormPage() {
       setPriceMinPkr(data.price_min_pkr != null ? String(data.price_min_pkr) : '')
       setPriceMaxPkr(data.price_max_pkr != null ? String(data.price_max_pkr) : '')
       setImages(data.images ?? [])
+      setVideoUrl(data.video_url ?? '')
       setColor({
         color_supplier_name: data.color_supplier_name,
         color_display_name: data.color_display_name,
@@ -209,6 +212,30 @@ export default function ProductFormPage() {
 
   function removeImage(index: number) {
     setImages((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  async function handleVideoUpload(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    setUploadingVideo(true)
+    setError(null)
+    try {
+      const ext = file.name.split('.').pop() ?? 'mp4'
+      const path = `${slug || id || 'new'}/${Date.now()}.${ext}`
+      const { error: uploadError } = await supabase.storage
+        .from('product-videos')
+        .upload(path, file, { contentType: file.type, upsert: true })
+      if (uploadError) throw uploadError
+
+      const { data } = supabase.storage.from('product-videos').getPublicUrl(path)
+      setVideoUrl(data.publicUrl)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Video upload failed')
+    } finally {
+      setUploadingVideo(false)
+      event.target.value = ''
+    }
   }
 
   function setAttributeValue(attrId: string, value: string | number | boolean | string[]) {
@@ -328,6 +355,7 @@ export default function ProductFormPage() {
       price_min_pkr: priceMinPkr ? Number(priceMinPkr) : null,
       price_max_pkr: priceMaxPkr ? Number(priceMaxPkr) : null,
       images,
+      video_url: videoUrl || null,
       color_supplier_name: color.color_supplier_name,
       color_display_name: color.color_display_name,
       color_hex: color.color_hex,
@@ -564,6 +592,43 @@ export default function ProductFormPage() {
                       </div>
                     </div>
                   ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Video</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <label className="flex cursor-pointer items-center justify-center gap-2 border border-dashed border-border-cream bg-surface/5 px-4 py-6 text-sm text-text-dark-secondary hover:border-accent">
+                <Upload className="h-4 w-4" />
+                {uploadingVideo ? 'Uploading…' : videoUrl ? 'Replace video' : 'Upload video'}
+                <input
+                  type="file"
+                  accept="video/mp4,video/webm"
+                  className="hidden"
+                  onChange={handleVideoUpload}
+                  disabled={uploadingVideo}
+                />
+              </label>
+              <p className="font-mono text-[10px] uppercase tracking-widest text-text-dark-secondary">
+                MP4 or WEBM — plays on the product page
+              </p>
+
+              {videoUrl && (
+                <div className="relative overflow-hidden border border-border-cream">
+                  <video src={videoUrl} controls className="aspect-video w-full bg-black object-cover" />
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="absolute right-1 top-1 bg-black/50 text-white hover:bg-black/70"
+                    onClick={() => setVideoUrl('')}
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
                 </div>
               )}
             </CardContent>

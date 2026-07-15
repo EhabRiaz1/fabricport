@@ -375,6 +375,8 @@ export function requiresAuth(pathname: string): boolean {
 }
 
 export function canAccessZone(role: UserRole, zone: PortalZone): boolean {
-  if (role === 'admin') return true
+  // Strict: each role inhabits only its own portal zone. Admins do NOT silently
+  // pass into the supplier/buyer portals — they operate from /admin. This is what
+  // bounces an admin back out of a stale /supplier-portal URL (AuthGuard relies on it).
   return role === zone
 }

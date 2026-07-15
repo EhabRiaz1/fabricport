@@ -13,20 +13,22 @@ export function getSessionId(): string {
   return id
 }
 
-/** Fire-and-forget catalogue/product view event for supplier analytics. */
+/**
+ * Fire-and-forget catalogue/product view event for supplier analytics.
+ * Routed through the record_supplier_view RPC: viewer_id and viewed_at are
+ * stamped server-side (not forgeable from the client) and duplicate views from
+ * the same session within 30 minutes are collapsed server-side.
+ */
 export function trackSupplierView(input: {
   supplierId: string
   productId?: string
-  viewerId?: string | null
 }): void {
   supabase
-    .from('supplier_page_views')
-    .insert({
-      supplier_id: input.supplierId,
-      product_id: input.productId ?? null,
-      viewer_id: input.viewerId ?? null,
-      session_id: getSessionId(),
-      referrer: document.referrer || null,
+    .rpc('record_supplier_view', {
+      p_supplier: input.supplierId,
+      p_product: input.productId ?? null,
+      p_referrer: document.referrer || null,
+      p_session: getSessionId(),
     })
     .then(({ error }) => {
       if (error) console.warn('view tracking failed:', error.message)

@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { ChevronRight, ShoppingBag } from 'lucide-react'
+import { ChevronRight, Play, ShoppingBag } from 'lucide-react'
 import { PublicNav } from '@/components/layout/PublicNav'
 import { Footer } from '@/components/layout/Footer'
 import { FabricCard } from '@/components/marketplace/FabricCard'
+import { WishlistButton } from '@/components/marketplace/WishlistButton'
 import { SpecTable } from '@/components/shared/SpecTable'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -41,6 +42,7 @@ export default function FabricDetailPage() {
   const { isAuthenticated, user } = useAuth()
   const { currency, unit } = usePreferencesStore()
   const [activeImage, setActiveImage] = useState(0)
+  const [showVideo, setShowVideo] = useState(false)
   const [quantity, setQuantity] = useState(1)
   const [fxRate, setFxRate] = useState(278)
   const [adding, setAdding] = useState(false)
@@ -62,6 +64,7 @@ export default function FabricDetailPage() {
 
   useEffect(() => {
     setActiveImage(0)
+    setShowVideo(false)
   }, [product?.id])
 
   // Product view event + live presence for supplier analytics.
@@ -70,9 +73,8 @@ export default function FabricDetailPage() {
     trackSupplierView({
       supplierId: product.supplier_id,
       productId: product.id,
-      viewerId: user?.id,
     })
-  }, [product?.id, product?.supplier_id, user?.id])
+  }, [product?.id, product?.supplier_id])
 
   usePagePresence({
     path: `/fabric/${slug ?? ''}`,
@@ -238,8 +240,16 @@ export default function FabricDetailPage() {
 
         <div className="grid gap-10 lg:grid-cols-2">
           <div>
-            <div className="clip-corner overflow-hidden bg-surface">
-              {images[activeImage] ? (
+            <div className="relative clip-corner overflow-hidden bg-surface">
+              {showVideo && product.video_url ? (
+                <video
+                  src={product.video_url}
+                  poster={images[0]?.medium}
+                  controls
+                  playsInline
+                  className="aspect-square w-full bg-black object-cover"
+                />
+              ) : images[activeImage] ? (
                 <img
                   src={images[activeImage].medium}
                   srcSet={`${images[activeImage].card} 480w, ${images[activeImage].medium} 960w, ${images[activeImage].original} 1920w`}
@@ -256,18 +266,51 @@ export default function FabricDetailPage() {
                   </span>
                 </div>
               )}
+              <WishlistButton
+                productId={product.id}
+                className="absolute bottom-3 right-3 z-10"
+              />
             </div>
 
-            {images.length > 1 && (
+            {(images.length > 1 || product.video_url) && (
               <div className="mt-4 grid grid-cols-4 gap-3">
+                {product.video_url && (
+                  <button
+                    type="button"
+                    onClick={() => setShowVideo(true)}
+                    aria-label="Play product video"
+                    className={cn(
+                      'relative clip-corner-sm overflow-hidden border-2 transition-colors',
+                      showVideo ? 'border-accent' : 'border-border',
+                    )}
+                  >
+                    {images[0] ? (
+                      <img
+                        src={images[0].card}
+                        alt=""
+                        className="aspect-square w-full object-cover"
+                        loading="lazy"
+                        decoding="async"
+                      />
+                    ) : (
+                      <div className="aspect-square w-full bg-elevated" />
+                    )}
+                    <span className="absolute inset-0 grid place-items-center bg-black/30">
+                      <Play className="h-6 w-6 fill-white text-white" />
+                    </span>
+                  </button>
+                )}
                 {images.map((image, index) => (
                   <button
                     key={image.medium}
                     type="button"
-                    onClick={() => setActiveImage(index)}
+                    onClick={() => {
+                      setShowVideo(false)
+                      setActiveImage(index)
+                    }}
                     className={cn(
                       'clip-corner-sm overflow-hidden border-2 transition-colors',
-                      activeImage === index ? 'border-accent' : 'border-border',
+                      !showVideo && activeImage === index ? 'border-accent' : 'border-border',
                     )}
                   >
                     <img

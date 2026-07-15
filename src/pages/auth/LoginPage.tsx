@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label'
 import { AuthLayout } from '@/components/layout/AuthLayout'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
-import { ROLE_HOME_PATHS } from '@/types/app'
+import { ROLE_HOME_PATHS, isPortalZone } from '@/types/app'
 
 export default function LoginPage() {
   const navigate = useNavigate()
@@ -23,7 +23,14 @@ export default function LoginPage() {
   // mid-sign-in deadlocks supabase-js.
   useEffect(() => {
     if (!isAuthenticated || !role) return
-    const target = from && !from.startsWith('/auth') ? from : ROLE_HOME_PATHS[role]
+    // Only honour `from` if it targets this user's own zone (or a non-portal path).
+    // A stale `from` pointing at another role's portal — e.g. an admin who hit a
+    // /supplier-portal URL while logged out — must not redirect them into it.
+    const fromZone = from ? isPortalZone(from) : null
+    const target =
+      from && !from.startsWith('/auth') && (fromZone === null || fromZone === role)
+        ? from
+        : ROLE_HOME_PATHS[role]
     navigate(target, { replace: true })
   }, [isAuthenticated, role, from, navigate])
 

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Activity, Building2, Eye, Radio } from 'lucide-react'
+import { Activity, Building2, Clock, Eye, MessageSquare, Radio } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { TrendChart, type TrendPoint } from '@/components/shared/TrendChart'
@@ -31,6 +31,13 @@ function dayLabel(date: Date): string {
   return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 }
 
+function durationLabel(minutes: number): string {
+  if (!minutes) return '—'
+  if (minutes < 60) return `${Math.round(minutes)}m`
+  if (minutes < 60 * 24) return `${Math.round(minutes / 60)}h`
+  return `${Math.round(minutes / (60 * 24))}d`
+}
+
 function relativeTime(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime()
   const minutes = Math.floor(diff / 60_000)
@@ -48,6 +55,7 @@ export default function SupplierAnalyticsPage() {
   const [totals, setTotals] = useState({ month: 0, week: 0, uniqueCompanies: 0 })
   const [visitors, setVisitors] = useState<VisitorStat[]>([])
   const [topProducts, setTopProducts] = useState<TopProduct[]>([])
+  const [responseStats, setResponseStats] = useState({ rate: 0, medianMinutes: 0 })
   const [liveVisitors, setLiveVisitors] = useState<PresenceEntry[]>([])
 
   // Live visitors on this supplier's catalogue/product pages.
@@ -69,7 +77,7 @@ export default function SupplierAnalyticsPage() {
       const monthAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
       const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000
 
-      const [viewsRes, visitorsRes] = await Promise.all([
+      const [viewsRes, visitorsRes, responseRes] = await Promise.all([
         supabase
           .from('supplier_page_views')
           .select('viewed_at, product_id')
@@ -78,9 +86,16 @@ export default function SupplierAnalyticsPage() {
           .order('viewed_at', { ascending: true })
           .limit(5000),
         supabase.rpc('get_supplier_visitor_stats', { supplier_uuid: supplierId }),
+        supabase.rpc('get_supplier_response_stats', { supplier_uuid: supplierId }),
       ])
 
       const views = viewsRes.data ?? []
+
+      const response = responseRes.data?.[0]
+      setResponseStats({
+        rate: response?.response_rate ?? 0,
+        medianMinutes: response?.median_response_minutes ?? 0,
+      })
 
       // Daily buckets — last 30 days
       const buckets = new Map<string, number>()
@@ -199,6 +214,8 @@ export default function SupplierAnalyticsPage() {
           { label: 'Views (7d)', value: totals.week, icon: Activity },
           { label: 'Views (30d)', value: totals.month, icon: Eye },
           { label: 'Companies (30d)', value: totals.uniqueCompanies, icon: Building2 },
+          { label: 'Response rate', value: `${responseStats.rate}%`, icon: MessageSquare },
+          { label: 'Median reply', value: durationLabel(responseStats.medianMinutes), icon: Clock },
         ].map(({ label, value, icon: Icon }) => (
           <Card key={label}>
             <CardContent className="flex items-center gap-4 p-6">

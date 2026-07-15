@@ -10,7 +10,6 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useProducts } from '@/hooks/useProducts'
 import { useSupplier } from '@/hooks/useSuppliers'
-import { useAuth } from '@/contexts/AuthContext'
 import { getFxRate } from '@/lib/fx'
 import { trackSupplierView, usePagePresence } from '@/lib/track'
 import { usePreferencesStore } from '@/stores/preferences'
@@ -18,7 +17,6 @@ import { usePreferencesStore } from '@/stores/preferences'
 export default function SupplierPage() {
   const { slug } = useParams<{ slug: string }>()
   const { supplier, loading: supplierLoading, error } = useSupplier(slug)
-  const { user } = useAuth()
   const { products, loading: productsLoading } = useProducts({
     supplierSlug: slug,
     enabled: Boolean(slug),
@@ -33,8 +31,8 @@ export default function SupplierPage() {
   // Catalogue view event + live presence for supplier analytics.
   useEffect(() => {
     if (!supplier?.id) return
-    trackSupplierView({ supplierId: supplier.id, viewerId: user?.id })
-  }, [supplier?.id, user?.id])
+    trackSupplierView({ supplierId: supplier.id })
+  }, [supplier?.id])
 
   usePagePresence({
     path: `/supplier/${slug ?? ''}`,

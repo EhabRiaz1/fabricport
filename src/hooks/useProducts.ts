@@ -29,44 +29,6 @@ export interface UseProductsOptions {
   pageSize?: number
 }
 
-function getGsmFromProduct(product: ProductWithRelations): number | null {
-  const match = product.attributes?.find(
-    (attr) =>
-      attr.attribute?.slug === 'gsm' ||
-      attr.attribute?.slug === 'weight' ||
-      attr.attribute?.slug === 'weight-before-wash',
-  )
-  if (match?.value_number != null) return match.value_number
-  if (match?.value_text) {
-    const parsed = match.value_text.match(/(\d+)/)
-    return parsed ? Number(parsed[1]) : null
-  }
-  return null
-}
-
-function applyClientFilters(
-  products: ProductWithRelations[],
-  filters?: MarketplaceFilters,
-): ProductWithRelations[] {
-  let result = products
-
-  if (filters?.gsmMin != null) {
-    result = result.filter((product) => {
-      const gsm = getGsmFromProduct(product)
-      return gsm != null && gsm >= filters.gsmMin!
-    })
-  }
-
-  if (filters?.gsmMax != null) {
-    result = result.filter((product) => {
-      const gsm = getGsmFromProduct(product)
-      return gsm != null && gsm <= filters.gsmMax!
-    })
-  }
-
-  return result
-}
-
 async function resolveSupplierId(slug: string): Promise<string | null> {
   const { data } = await supabase
     .from('suppliers')
@@ -156,16 +118,17 @@ export async function fetchProductsPage(
     }
     if (filters?.priceMin != null) query = query.gte('price_min_pkr', filters.priceMin)
     if (filters?.priceMax != null) query = query.lte('price_max_pkr', filters.priceMax)
+    // GSM is a real column now, so it filters server-side. Doing it after
+    // pagination (as before) corrupted `total` and `hasMore`.
+    if (filters?.gsmMin != null) query = query.gte('gsm', filters.gsmMin)
+    if (filters?.gsmMax != null) query = query.lte('gsm', filters.gsmMax)
     if (supplierId) query = query.eq('supplier_id', supplierId)
     if (categoryId) query = query.eq('category_id', categoryId)
 
     const { data, error, count } = await query
     if (error) throw new Error(error.message)
 
-    const products = applyClientFilters(
-      (data ?? []) as unknown as ProductWithRelations[],
-      filters,
-    )
+    const products = (data ?? []) as unknown as ProductWithRelations[]
     return { products, total: count ?? products.length }
   }
 
@@ -183,13 +146,15 @@ export async function fetchProductsPage(
   }
   if (filters?.priceMin != null) query = query.gte('price_min_pkr', filters.priceMin)
   if (filters?.priceMax != null) query = query.lte('price_max_pkr', filters.priceMax)
+  if (filters?.gsmMin != null) query = query.gte('gsm', filters.gsmMin)
+  if (filters?.gsmMax != null) query = query.lte('gsm', filters.gsmMax)
   if (supplierId) query = query.eq('supplier_id', supplierId)
   if (categoryId) query = query.eq('category_id', categoryId)
 
   const { data, error, count } = await query
   if (error) throw new Error(error.message)
 
-  const products = applyClientFilters((data ?? []) as ProductWithRelations[], filters)
+  const products = (data ?? []) as ProductWithRelations[]
   return { products, total: count ?? products.length }
 }
 

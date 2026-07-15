@@ -5,14 +5,17 @@ import { AuthGuard } from '@/components/shared/AuthGuard'
 import { ErrorBoundary } from '@/components/shared/ErrorBoundary'
 import { Toaster } from '@/components/ui/toaster'
 import { PortalShell } from '@/components/layout/PortalShell'
+import { WishlistSync } from '@/components/marketplace/WishlistSync'
 import HomePage from '@/pages/public/HomePage'
 import MarketplacePage from '@/pages/public/MarketplacePage'
 import FabricDetailPage from '@/pages/public/FabricDetailPage'
 import SupplierPage from '@/pages/public/SupplierPage'
 import VendorsPage from '@/pages/public/VendorsPage'
 import SellPage from '@/pages/public/SellPage'
+import CataloguePage from '@/pages/public/CataloguePage'
 import LoginPage from '@/pages/auth/LoginPage'
 import RegisterPage from '@/pages/auth/RegisterPage'
+import PendingPage from '@/pages/auth/PendingPage'
 import DashboardPage from '@/pages/admin/DashboardPage'
 import ProductsPage from '@/pages/admin/ProductsPage'
 import ProductFormPage from '@/pages/admin/ProductFormPage'
@@ -29,12 +32,14 @@ import InquiryDetailPage from '@/pages/admin/InquiryDetailPage'
 import SettingsPage from '@/pages/admin/SettingsPage'
 import BuyerDashboardPage from '@/pages/buyer/DashboardPage'
 import BuyerCartPage from '@/pages/buyer/CartPage'
+import BuyerWishlistPage from '@/pages/buyer/WishlistPage'
 import BuyerInquiriesPage from '@/pages/buyer/InquiriesPage'
 import BuyerInquiryDetailPage from '@/pages/buyer/InquiryDetailPage'
 import BuyerSettingsPage from '@/pages/buyer/SettingsPage'
 import SupplierDashboardPage from '@/pages/supplier/DashboardPage'
 import SupplierAnalyticsPage from '@/pages/supplier/AnalyticsPage'
 import SupplierInventoryPage from '@/pages/supplier/InventoryPage'
+import SupplierCataloguesPage from '@/pages/supplier/CataloguesPage'
 import SupplierInquiriesPage from '@/pages/supplier/InquiriesPage'
 import SupplierInquiryDetailPage from '@/pages/supplier/InquiryDetailPage'
 import ListingRequestPage from '@/pages/supplier/ListingRequestPage'
@@ -57,6 +62,7 @@ export default function App() {
   return (
     <ErrorBoundary>
       <AuthProvider>
+        <WishlistSync />
         <BrowserRouter>
         <SmoothScroll>
           <Routes>
@@ -66,8 +72,17 @@ export default function App() {
             <Route path="/fabric/:slug" element={<FabricDetailPage />} />
             <Route path="/supplier/:slug" element={<SupplierPage />} />
             <Route path="/vendors" element={<VendorsPage />} />
+            <Route path="/c/:token" element={<CataloguePage />} />
             <Route path="/auth/login" element={<LoginPage />} />
             <Route path="/auth/register" element={<RegisterPage />} />
+            <Route
+              path="/auth/pending"
+              element={
+                <AuthGuard requireActive={false}>
+                  <PendingPage />
+                </AuthGuard>
+              }
+            />
 
             <Route
               path="/buyer/*"
@@ -82,6 +97,7 @@ export default function App() {
               <Route index element={<Navigate to="dashboard" replace />} />
               <Route path="dashboard" element={<BuyerDashboardPage />} />
               <Route path="cart" element={<BuyerCartPage />} />
+              <Route path="wishlist" element={<BuyerWishlistPage />} />
               <Route path="inquiries" element={<BuyerInquiriesPage />} />
               <Route path="inquiries/:id" element={<BuyerInquiryDetailPage />} />
               <Route path="support" element={<SupportPage />} />
@@ -112,6 +128,7 @@ export default function App() {
               <Route path="dashboard" element={<SupplierDashboardPage />} />
               <Route path="analytics" element={<SupplierAnalyticsPage />} />
               <Route path="inventory" element={<SupplierInventoryPage />} />
+              <Route path="catalogues" element={<SupplierCataloguesPage />} />
               <Route path="inquiries" element={<SupplierInquiriesPage />} />
               <Route path="inquiries/:id" element={<SupplierInquiryDetailPage />} />
               <Route path="listing-request" element={<ListingRequestPage />} />

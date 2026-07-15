@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { supabase } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
+import { AttachmentList } from '@/components/chat/AttachmentList'
 import type { InquiryStatus, Message, Profile } from '@/types/database.types'
 import { AdminPageHeader } from './components/AdminPageHeader'
 
@@ -185,20 +186,7 @@ export default function InquiryDetailPage() {
                       {msg.content ?? '(attachment only)'}
                     </p>
                     {msg.attachments?.length > 0 && (
-                      <ul className="mt-2 space-y-1">
-                        {msg.attachments.map((att) => (
-                          <li key={att.url}>
-                            <a
-                              href={att.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-xs text-accent hover:underline"
-                            >
-                              {att.name}
-                            </a>
-                          </li>
-                        ))}
-                      </ul>
+                      <AttachmentList attachments={msg.attachments} />
                     )}
                   </div>
                 )

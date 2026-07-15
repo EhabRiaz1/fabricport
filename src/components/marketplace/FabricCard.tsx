@@ -9,6 +9,7 @@ import {
 } from '@/lib/utils'
 import type { ProductImageVariant } from '@/lib/product-images'
 import { convertPrice } from '@/lib/fx'
+import { WishlistButton } from '@/components/marketplace/WishlistButton'
 import type { FabricCardProps } from '@/types/app'
 
 function getAttributeValue(
@@ -168,12 +169,18 @@ function FabricCardComponent({
 
   const priceValue = formatProductPrice(product, currency, fxRate)
   const unitSuffix = unit === 'yards' ? '/yd' : '/m'
-  const gsm = getAttributeValue(product, 'weight-before-wash')
-    ?? getAttributeValue(product, 'gsm')
-    ?? getAttributeValue(product, 'weight')
-  const width = getAttributeValue(product, 'width-inches')
-    ?? getAttributeValue(product, 'width')
-  const composition = getAttributeValue(product, 'fabric-content')
+  // Prefer the real spec columns (backfilled); fall back to legacy EAV attributes.
+  const gsm = product.gsm != null
+    ? String(product.gsm)
+    : getAttributeValue(product, 'weight-before-wash')
+      ?? getAttributeValue(product, 'gsm')
+      ?? getAttributeValue(product, 'weight')
+  const width = product.width_inches != null
+    ? String(product.width_inches)
+    : getAttributeValue(product, 'width-inches')
+      ?? getAttributeValue(product, 'width')
+  const composition = product.composition
+    ?? getAttributeValue(product, 'fabric-content')
     ?? getAttributeValue(product, 'composition')
   const stock = unit === 'yards'
     ? `${metersToYards(product.stock_meters).toFixed(0)} yd`
@@ -188,7 +195,7 @@ function FabricCardComponent({
   )
 
   const cardBody = (
-      <Link to={`/fabric/${product.slug}`} className="flex h-full min-h-0 flex-col">
+      <div className="flex h-full min-h-0 flex-col">
         {/* Header */}
         <div className={cn('shrink-0', isGrid ? 'px-4 pb-1 pt-4' : 'px-5 pb-2 pt-5')}>
           <h3
@@ -237,6 +244,11 @@ function FabricCardComponent({
               title={product.color_display_name ?? undefined}
             />
           )}
+          {/* Wishlist heart mirrors the swatch at the bottom-right of the image */}
+          <WishlistButton
+            productId={product.id}
+            className="absolute bottom-2 right-2 z-20"
+          />
         </div>
 
         {/* Spec rows — compact for square grid */}
@@ -299,7 +311,7 @@ function FabricCardComponent({
               {onAddToCart && (
                 <>
                   <div className="h-px bg-[#C8C4BC]" />
-                  <div className="flex justify-end px-5 py-3">
+                  <div className="relative z-20 flex justify-end px-5 py-3">
                     <button
                       type="button"
                       onClick={(e) => { e.preventDefault(); onAddToCart(product.id) }}
@@ -313,7 +325,15 @@ function FabricCardComponent({
             </>
           )}
         </div>
-      </Link>
+
+        {/* Stretched navigation link — covers the whole card, sits beneath the
+            wishlist heart and any inline action buttons (z-20). */}
+        <Link
+          to={`/fabric/${product.slug}`}
+          aria-label={product.title}
+          className="absolute inset-0 z-10"
+        />
+      </div>
   )
 
   if (isGrid) {

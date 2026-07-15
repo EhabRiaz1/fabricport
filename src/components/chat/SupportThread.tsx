@@ -5,6 +5,8 @@ import { supabase } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
 import { Skeleton } from '@/components/ui/skeleton'
 import { MessageInput } from '@/components/chat/MessageInput'
+import { AttachmentList } from '@/components/chat/AttachmentList'
+import { uploadAttachments } from '@/lib/attachments'
 import type { SupportMessage } from '@/types/database.types'
 
 export interface SupportThreadProps {
@@ -96,21 +98,31 @@ export function SupportThread({
     })
   }, [messages, currentUserId])
 
-  async function handleSend(content: string) {
+  async function handleSend(content: string, files?: File[]) {
+    const attachments = files?.length
+      ? await uploadAttachments(files, `support/${threadUserId}`)
+      : []
+
     const { error } = await supabase.from('support_messages').insert({
       user_id: threadUserId,
       sender_id: currentUserId,
       content,
+      attachments,
     })
     if (error) throw new Error(error.message)
 
     // Admin outreach pings the user across their channels.
     if (isAdminView) {
+      const preview = content
+        ? content.length > 120
+          ? `${content.slice(0, 117)}…`
+          : content
+        : `Sent ${attachments.length} attachment${attachments.length === 1 ? '' : 's'}`
       dispatchNotification({
         userId: threadUserId,
         type: 'support_message',
         title: 'New message from the FabricPort team',
-        body: content.length > 120 ? `${content.slice(0, 117)}…` : content,
+        body: preview,
       }).catch(() => undefined)
     }
   }
@@ -147,7 +159,13 @@ export function SupportThread({
                       FabricPort team
                     </p>
                   )}
-                  <p className="whitespace-pre-wrap">{msg.content}</p>
+                  {msg.content && <p className="whitespace-pre-wrap">{msg.content}</p>}
+                  {msg.attachments?.length > 0 && (
+                    <AttachmentList
+                      attachments={msg.attachments}
+                      variant={isOwn ? 'own' : 'default'}
+                    />
+                  )}
                   <p
                     className={cn(
                       'mt-1 font-mono text-[10px]',

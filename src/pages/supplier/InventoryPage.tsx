@@ -4,6 +4,7 @@ import { Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { Skeleton } from '@/components/ui/skeleton'
 import { StatusBadge } from '@/components/ui/badge'
 import { useProfile } from '@/hooks/useProfile'
@@ -11,15 +12,25 @@ import { supabase } from '@/lib/supabase'
 import { getProductImageUrl } from '@/lib/utils'
 import { toast } from '@/stores/toast'
 import type { ProductWithRelations } from '@/types/app'
+import type { ProductVisibility } from '@/types/database.types'
+
+interface ProductDraft {
+  stock: string
+  priceMin: string
+  priceMax: string
+  moq: string
+  leadTime: string
+  description: string
+  visibility: ProductVisibility
+  sampleAvailable: boolean
+}
 
 export default function SupplierInventoryPage() {
   const { profile } = useProfile()
   const [products, setProducts] = useState<ProductWithRelations[]>([])
   const [loading, setLoading] = useState(true)
   const [savingId, setSavingId] = useState<string | null>(null)
-  const [drafts, setDrafts] = useState<
-    Record<string, { stock: string; priceMin: string; priceMax: string }>
-  >({})
+  const [drafts, setDrafts] = useState<Record<string, ProductDraft>>({})
   const [search, setSearch] = useState('')
 
   const profileId = profile?.id
@@ -43,6 +54,11 @@ export default function SupplierInventoryPage() {
             stock: String(p.stock_meters),
             priceMin: p.price_min_pkr != null ? String(p.price_min_pkr) : '',
             priceMax: p.price_max_pkr != null ? String(p.price_max_pkr) : '',
+            moq: p.moq_meters != null ? String(p.moq_meters) : '',
+            leadTime: p.lead_time_days != null ? String(p.lead_time_days) : '',
+            description: p.description ?? '',
+            visibility: p.visibility,
+            sampleAvailable: p.sample_available,
           },
         ]),
       ),
@@ -66,6 +82,12 @@ export default function SupplierInventoryPage() {
         stock_meters: Number(draft.stock) || 0,
         price_min_pkr: draft.priceMin ? Number(draft.priceMin) : null,
         price_max_pkr: draft.priceMax ? Number(draft.priceMax) : null,
+        moq_meters: draft.moq ? Number(draft.moq) : null,
+        lead_time_days: draft.leadTime ? Number(draft.leadTime) : null,
+        description: draft.description.trim() || null,
+        visibility: draft.visibility,
+        sample_available: draft.sampleAvailable,
+        // Price edits re-open approval (also enforced by the DB guard trigger).
         price_approved: false,
         updated_at: new Date().toISOString(),
       })
@@ -80,14 +102,10 @@ export default function SupplierInventoryPage() {
     setSavingId(null)
   }
 
-  function updateDraft(
-    productId: string,
-    field: 'stock' | 'priceMin' | 'priceMax',
-    value: string,
-  ) {
+  function updateDraft(productId: string, patch: Partial<ProductDraft>) {
     setDrafts((prev) => ({
       ...prev,
-      [productId]: { ...prev[productId], [field]: value },
+      [productId]: { ...prev[productId], ...patch },
     }))
   }
 
@@ -163,8 +181,8 @@ export default function SupplierInventoryPage() {
               </div>
               <StatusBadge status={product.status} />
             </CardHeader>
-            <CardContent>
-              <div className="grid gap-4 sm:grid-cols-4">
+            <CardContent className="space-y-4">
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
                 <div>
                   <label className="mb-1 block font-mono text-[10px] uppercase tracking-widest text-text-dark-secondary">
                     Stock (m)
@@ -173,7 +191,7 @@ export default function SupplierInventoryPage() {
                     type="number"
                     min={0}
                     value={drafts[product.id]?.stock ?? ''}
-                    onChange={(e) => updateDraft(product.id, 'stock', e.target.value)}
+                    onChange={(e) => updateDraft(product.id, { stock: e.target.value })}
                     className="border-border-cream bg-card-hover text-text-dark"
                   />
                 </div>
@@ -185,7 +203,7 @@ export default function SupplierInventoryPage() {
                     type="number"
                     min={0}
                     value={drafts[product.id]?.priceMin ?? ''}
-                    onChange={(e) => updateDraft(product.id, 'priceMin', e.target.value)}
+                    onChange={(e) => updateDraft(product.id, { priceMin: e.target.value })}
                     className="border-border-cream bg-card-hover text-text-dark"
                   />
                 </div>
@@ -197,23 +215,93 @@ export default function SupplierInventoryPage() {
                     type="number"
                     min={0}
                     value={drafts[product.id]?.priceMax ?? ''}
-                    onChange={(e) => updateDraft(product.id, 'priceMax', e.target.value)}
+                    onChange={(e) => updateDraft(product.id, { priceMax: e.target.value })}
                     className="border-border-cream bg-card-hover text-text-dark"
                   />
                 </div>
-                <div className="flex items-end">
-                  <Button
-                    onClick={() => saveProduct(product.id)}
-                    disabled={savingId === product.id}
-                    className="w-full"
-                  >
-                    {savingId === product.id ? 'Saving…' : 'Save'}
-                  </Button>
+                <div>
+                  <label className="mb-1 block font-mono text-[10px] uppercase tracking-widest text-text-dark-secondary">
+                    MOQ (m)
+                  </label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={drafts[product.id]?.moq ?? ''}
+                    onChange={(e) => updateDraft(product.id, { moq: e.target.value })}
+                    className="border-border-cream bg-card-hover text-text-dark"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block font-mono text-[10px] uppercase tracking-widest text-text-dark-secondary">
+                    Lead time (days)
+                  </label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={drafts[product.id]?.leadTime ?? ''}
+                    onChange={(e) => updateDraft(product.id, { leadTime: e.target.value })}
+                    className="border-border-cream bg-card-hover text-text-dark"
+                  />
                 </div>
               </div>
-              {!product.price_approved && product.price_min_pkr != null && (
-                <p className="mt-2 text-xs text-warning">Price pending admin approval</p>
-              )}
+
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <div>
+                  <label className="mb-1 block font-mono text-[10px] uppercase tracking-widest text-text-dark-secondary">
+                    Visibility
+                  </label>
+                  <select
+                    value={drafts[product.id]?.visibility ?? 'public'}
+                    onChange={(e) =>
+                      updateDraft(product.id, { visibility: e.target.value as ProductVisibility })
+                    }
+                    className="h-10 w-full border border-border-cream bg-card-hover px-3 text-sm text-text-dark"
+                  >
+                    <option value="public">Public — visible to everyone</option>
+                    <option value="private">Private — share by link only</option>
+                  </select>
+                </div>
+                <div className="flex items-end pb-2">
+                  <label className="flex cursor-pointer items-center gap-2 text-sm text-text-dark">
+                    <input
+                      type="checkbox"
+                      checked={drafts[product.id]?.sampleAvailable ?? false}
+                      onChange={(e) =>
+                        updateDraft(product.id, { sampleAvailable: e.target.checked })
+                      }
+                      className="h-4 w-4 accent-accent"
+                    />
+                    Sample available
+                  </label>
+                </div>
+                <div className="sm:col-span-2 lg:col-span-2" />
+              </div>
+
+              <div>
+                <label className="mb-1 block font-mono text-[10px] uppercase tracking-widest text-text-dark-secondary">
+                  Description
+                </label>
+                <Textarea
+                  value={drafts[product.id]?.description ?? ''}
+                  onChange={(e) => updateDraft(product.id, { description: e.target.value })}
+                  placeholder="Fabric details buyers should know…"
+                  className="min-h-[70px] border-border-cream bg-card-hover text-text-dark"
+                />
+              </div>
+
+              <div className="flex items-center justify-between gap-4">
+                {!product.price_approved && product.price_min_pkr != null ? (
+                  <p className="text-xs text-warning">Price pending admin approval</p>
+                ) : (
+                  <span />
+                )}
+                <Button
+                  onClick={() => saveProduct(product.id)}
+                  disabled={savingId === product.id}
+                >
+                  {savingId === product.id ? 'Saving…' : 'Save changes'}
+                </Button>
+              </div>
             </CardContent>
           </Card>
         ))

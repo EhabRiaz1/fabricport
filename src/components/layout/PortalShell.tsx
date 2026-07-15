@@ -18,6 +18,8 @@ import {
   Activity,
   LifeBuoy,
   Search,
+  Heart,
+  Link2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { PortalNavItem, PortalZone } from '@/types/app'
@@ -32,6 +34,7 @@ const PORTAL_NAV: Record<PortalZone, PortalNavItem[]> = {
     { label: 'Dashboard', href: '/buyer/dashboard', icon: 'dashboard' },
     { label: 'Marketplace', href: '/marketplace', icon: 'store' },
     { label: 'Cart', href: '/buyer/cart', icon: 'cart' },
+    { label: 'Wishlist', href: '/buyer/wishlist', icon: 'heart' },
     { label: 'Inquiries', href: '/buyer/inquiries', icon: 'messages' },
     { label: 'Support', href: '/buyer/support', icon: 'support' },
     { label: 'Settings', href: '/buyer/settings', icon: 'settings' },
@@ -40,6 +43,7 @@ const PORTAL_NAV: Record<PortalZone, PortalNavItem[]> = {
     { label: 'Dashboard', href: '/supplier-portal/dashboard', icon: 'dashboard' },
     { label: 'Analytics', href: '/supplier-portal/analytics', icon: 'chart' },
     { label: 'Inventory', href: '/supplier-portal/inventory', icon: 'package' },
+    { label: 'Catalogues', href: '/supplier-portal/catalogues', icon: 'link' },
     { label: 'Inquiries', href: '/supplier-portal/inquiries', icon: 'messages' },
     { label: 'Listing Requests', href: '/supplier-portal/listing-request', icon: 'clipboard' },
     { label: 'Support', href: '/supplier-portal/support', icon: 'support' },
@@ -71,6 +75,8 @@ const ICON_MAP = {
   store: Store,
   activity: Activity,
   support: LifeBuoy,
+  heart: Heart,
+  link: Link2,
 } as const
 
 const ZONE_LABELS: Record<PortalZone, string> = {
@@ -96,8 +102,12 @@ function initialsOf(name: string | null | undefined, email: string | undefined):
 export function PortalShell({ children, zone, title, className }: PortalShellProps) {
   const location = useLocation()
   const navigate = useNavigate()
-  const { user, profile, signOut } = useAuth()
-  const resolvedZone = zone ?? isPortalZone(location.pathname) ?? 'buyer'
+  const { user, profile, role, signOut } = useAuth()
+  // Prefer the explicit zone prop (always passed by the router). Fall back to the
+  // user's ROLE — never to a path heuristic that could hand a user another zone's
+  // nav. UserRole and PortalZone share the same value set.
+  const resolvedZone =
+    zone ?? (role as PortalZone | null) ?? isPortalZone(location.pathname) ?? 'buyer'
   const navItems = PORTAL_NAV[resolvedZone]
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [paletteOpen, setPaletteOpen] = useState(false)

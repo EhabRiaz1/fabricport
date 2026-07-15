@@ -237,7 +237,7 @@ export function FilterDock({
               role="dialog"
               aria-modal="true"
               aria-label="Refine selection"
-              className="fixed inset-x-0 bottom-0 z-50 flex max-h-[82vh] flex-col border-t border-[#2C1A0E]/15 bg-[#EFEAE0] shadow-[0_-24px_80px_-20px_rgba(26,14,6,0.45)]"
+              className="fixed inset-x-0 bottom-0 z-50 flex max-h-[82dvh] flex-col border-t border-[#2C1A0E]/15 bg-[#EFEAE0] shadow-[0_-24px_80px_-20px_rgba(26,14,6,0.45)]"
               initial={{ y: '100%' }}
               animate={{ y: 0 }}
               exit={{ y: '100%' }}

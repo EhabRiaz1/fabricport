@@ -5,6 +5,8 @@ import { supabase } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
 import { Skeleton } from '@/components/ui/skeleton'
 import { MessageInput } from '@/components/chat/MessageInput'
+import { AttachmentList } from '@/components/chat/AttachmentList'
+import { uploadAttachments } from '@/lib/attachments'
 import type { Message } from '@/types/database.types'
 
 export interface ChatThreadProps {
@@ -113,20 +115,30 @@ export function ChatThread({
     })
   }, [messages, currentUserId])
 
-  async function handleSend(content: string) {
+  async function handleSend(content: string, files?: File[]) {
+    const attachments = files?.length
+      ? await uploadAttachments(files, `inquiry/${inquiryId}`)
+      : []
+
     const { error } = await supabase.from('messages').insert({
       inquiry_id: inquiryId,
       sender_id: currentUserId,
       content,
+      attachments,
     })
     if (error) throw new Error(error.message)
 
     if (notifyUserId) {
+      const preview = content
+        ? content.length > 120
+          ? `${content.slice(0, 117)}…`
+          : content
+        : `Sent ${attachments.length} attachment${attachments.length === 1 ? '' : 's'}`
       dispatchNotification({
         userId: notifyUserId,
         type: 'message_received',
         title: `New message${notifyFromLabel ? ` from ${notifyFromLabel}` : ''}`,
-        body: content.length > 120 ? `${content.slice(0, 117)}…` : content,
+        body: preview,
         data: { inquiry_id: inquiryId },
       }).catch(() => undefined)
     }
@@ -160,7 +172,13 @@ export function ChatThread({
                       : 'border border-border-cream bg-card-hover text-text-dark clip-corner-sm',
                   )}
                 >
-                  <p className="whitespace-pre-wrap">{msg.content}</p>
+                  {msg.content && <p className="whitespace-pre-wrap">{msg.content}</p>}
+                  {msg.attachments?.length > 0 && (
+                    <AttachmentList
+                      attachments={msg.attachments}
+                      variant={isOwn ? 'own' : 'default'}
+                    />
+                  )}
                   <div
                     className={cn(
                       'mt-1 flex items-center gap-1 font-mono text-[10px]',

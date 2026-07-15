@@ -70,7 +70,9 @@ export interface ListingFabricDetails {
 
 export interface MessageAttachment {
   name: string
-  url: string
+  /** Storage object key within the private message-attachments bucket. Rendered
+   *  via a short-lived signed URL, never a public URL. */
+  path: string
   size: number
   type: string
 }
@@ -317,6 +319,11 @@ export interface Database {
           stock_meters: number
           moq_meters: number | null
           lead_time_days: number | null
+          gsm: number | null
+          width_inches: number | null
+          composition: string | null
+          sample_available: boolean
+          video_url: string | null
           images: string[]
           scan_files: string[]
           color_supplier_name: string | null
@@ -352,6 +359,11 @@ export interface Database {
           stock_meters?: number
           moq_meters?: number | null
           lead_time_days?: number | null
+          gsm?: number | null
+          width_inches?: number | null
+          composition?: string | null
+          sample_available?: boolean
+          video_url?: string | null
           images?: string[]
           scan_files?: string[]
           color_supplier_name?: string | null
@@ -387,6 +399,11 @@ export interface Database {
           stock_meters?: number
           moq_meters?: number | null
           lead_time_days?: number | null
+          gsm?: number | null
+          width_inches?: number | null
+          composition?: string | null
+          sample_available?: boolean
+          video_url?: string | null
           images?: string[]
           scan_files?: string[]
           color_supplier_name?: string | null
@@ -666,6 +683,7 @@ export interface Database {
           user_id: string
           sender_id: string
           content: string
+          attachments: MessageAttachment[]
           read_at: string | null
           created_at: string
         }
@@ -674,6 +692,7 @@ export interface Database {
           user_id: string
           sender_id: string
           content: string
+          attachments?: MessageAttachment[]
           read_at?: string | null
           created_at?: string
         }
@@ -682,6 +701,7 @@ export interface Database {
           user_id?: string
           sender_id?: string
           content?: string
+          attachments?: MessageAttachment[]
           read_at?: string | null
           created_at?: string
         }
@@ -797,6 +817,110 @@ export interface Database {
           },
           {
             foreignKeyName: 'cart_items_product_id_fkey'
+            columns: ['product_id']
+            isOneToOne: false
+            referencedRelation: 'products'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      wishlist_items: {
+        Row: {
+          id: string
+          buyer_id: string
+          product_id: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          buyer_id: string
+          product_id: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          buyer_id?: string
+          product_id?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'wishlist_items_buyer_id_fkey'
+            columns: ['buyer_id']
+            isOneToOne: false
+            referencedRelation: 'buyers'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'wishlist_items_product_id_fkey'
+            columns: ['product_id']
+            isOneToOne: false
+            referencedRelation: 'products'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      catalogues: {
+        Row: {
+          id: string
+          supplier_id: string
+          name: string
+          share_token: string
+          is_active: boolean
+          expires_at: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          supplier_id: string
+          name: string
+          share_token?: string
+          is_active?: boolean
+          expires_at?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          supplier_id?: string
+          name?: string
+          share_token?: string
+          is_active?: boolean
+          expires_at?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'catalogues_supplier_id_fkey'
+            columns: ['supplier_id']
+            isOneToOne: false
+            referencedRelation: 'suppliers'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      catalogue_products: {
+        Row: {
+          catalogue_id: string
+          product_id: string
+        }
+        Insert: {
+          catalogue_id: string
+          product_id: string
+        }
+        Update: {
+          catalogue_id?: string
+          product_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'catalogue_products_catalogue_id_fkey'
+            columns: ['catalogue_id']
+            isOneToOne: false
+            referencedRelation: 'catalogues'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'catalogue_products_product_id_fkey'
             columns: ['product_id']
             isOneToOne: false
             referencedRelation: 'products'
@@ -1117,6 +1241,28 @@ export interface Database {
           product_views: number
           last_visit: string
         }[]
+      }
+      record_supplier_view: {
+        Args: {
+          p_supplier: string
+          p_product?: string | null
+          p_referrer?: string | null
+          p_session?: string | null
+        }
+        Returns: undefined
+      }
+      get_supplier_response_stats: {
+        Args: { supplier_uuid: string; since?: string }
+        Returns: {
+          total_inquiries: number
+          responded: number
+          response_rate: number
+          median_response_minutes: number
+        }[]
+      }
+      get_catalogue: {
+        Args: { p_token: string }
+        Returns: Json
       }
     }
     Enums: Record<string, never>

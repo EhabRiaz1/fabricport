@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useProfile } from '@/hooks/useProfile'
+import { createInquiry } from '@/lib/inquiries'
 import { dispatchNotification } from '@/lib/notifications'
 import { supabase } from '@/lib/supabase'
 import { formatPrice, getProductImageUrl } from '@/lib/utils'
@@ -78,6 +79,11 @@ export default function CartPage() {
     [groups],
   )
 
+  // Rows whose supplier can't be resolved (supplier removed, or the product is no
+  // longer visible under RLS) are skipped by `groups`. They used to vanish silently:
+  // never submitted, never deleted, invisible in the UI, stuck in the cart forever.
+  const unavailableItems = useMemo(() => items.filter((item) => !item.product?.supplier), [items])
+
   async function updateItem(
     id: string,
     patch: { quantity_meters?: number; notes?: string | null },
@@ -106,42 +112,30 @@ export default function CartPage() {
     setSubmitting(true)
     setError(null)
 
+    let sent = 0
     try {
       for (const group of groups) {
-        const { data: inquiry, error: inquiryError } = await supabase
-          .from('inquiries')
-          .insert({
-            buyer_id: profile.id,
-            supplier_id: group.supplier.id,
-            status: 'open',
-          })
-          .select('id')
-          .single()
+        // One RPC == one transaction: the inquiry, its items and the cart cleanup
+        // either all land or none do. Buyers have no DELETE policy on `inquiries`,
+        // so a client-side multi-step version cannot clean up after itself.
+        const inquiryId = await createInquiry({
+          supplierId: group.supplier.id,
+          lines: group.items.map((item) => ({
+            product_id: item.product_id,
+            quantity_meters: item.quantity_meters,
+            notes: item.notes,
+          })),
+          cartItemIds: group.items.map((item) => item.id),
+        })
+        sent += 1
 
-        if (inquiryError) throw new Error(inquiryError.message)
-
-        const inquiryItems = group.items.map((item) => ({
-          inquiry_id: inquiry.id,
-          product_id: item.product_id,
-          quantity_meters: item.quantity_meters,
-          notes: item.notes,
-        }))
-
-        const { error: itemsError } = await supabase.from('inquiry_items').insert(inquiryItems)
-        if (itemsError) throw new Error(itemsError.message)
-
-        const cartIds = group.items.map((item) => item.id)
-        const { error: cartError } = await supabase.from('cart_items').delete().in('id', cartIds)
-        if (cartError) throw new Error(cartError.message)
-
-        // Server-side insert (RLS prevents cross-user inserts from the client);
-        // the edge function also fans out to WhatsApp/email.
+        // Fan-out only (WhatsApp/email). The inquiry itself is already committed.
         dispatchNotification({
           userId: group.supplier.id,
           type: 'inquiry_received',
           title: 'New inquiry received',
           body: `${profile.company_name ?? profile.full_name ?? 'A buyer'} sent an inquiry for ${group.items.length} fabric${group.items.length === 1 ? '' : 's'}.`,
-          data: { inquiry_id: inquiry.id },
+          data: { inquiry_id: inquiryId },
         }).catch(() => undefined)
       }
 
@@ -151,7 +145,14 @@ export default function CartPage() {
       )
       navigate('/buyer/inquiries')
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to submit inquiries')
+      // Each group is its own transaction, so an earlier group may have committed.
+      // Re-read the cart rather than leaving the list showing already-sent items.
+      setError(
+        `${err instanceof Error ? err.message : 'Failed to submit inquiries'}${
+          sent > 0 ? ` (${sent} of ${groups.length} inquiries were sent)` : ''
+        }`,
+      )
+      await loadCart()
     } finally {
       setSubmitting(false)
     }
@@ -200,7 +201,31 @@ export default function CartPage() {
         <p className="text-sm text-danger">{error}</p>
       )}
 
-      {groups.length === 0 ? (
+      {unavailableItems.length > 0 && (
+        <Card>
+          <CardContent className="flex flex-col gap-3 py-5 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-medium text-text-dark">
+                {unavailableItems.length} item{unavailableItems.length === 1 ? '' : 's'} can no
+                longer be ordered
+              </p>
+              <p className="mt-1 text-sm text-text-dark-secondary">
+                The supplier is no longer available. These items can't be included in an inquiry.
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              className="shrink-0"
+              onClick={() => unavailableItems.forEach((item) => removeItem(item.id))}
+            >
+              <Trash2 className="h-4 w-4" />
+              Remove {unavailableItems.length === 1 ? 'it' : 'them'}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {groups.length === 0 && unavailableItems.length === 0 ? (
         <Card>
           <CardContent className="py-16 text-center">
             <PackageOpen className="mx-auto h-10 w-10 text-text-muted" />

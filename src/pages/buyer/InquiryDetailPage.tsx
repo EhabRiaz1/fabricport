@@ -3,6 +3,8 @@ import { Link, useParams } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
 import { ChatThread } from '@/components/chat/ChatThread'
 import { InquirySummary } from '@/components/shared/InquirySummary'
+import { InquiryStatusControl } from '@/components/shared/InquiryStatusControl'
+import { StatusTimeline } from '@/components/shared/StatusTimeline'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useProfile } from '@/hooks/useProfile'
 import { INQUIRY_BASE_SELECT, INQUIRY_ITEMS_SELECT, normalizeInquiry } from '@/lib/inquiries'
@@ -17,6 +19,7 @@ export default function BuyerInquiryDetailPage() {
   const [inquiry, setInquiry] = useState<InquiryWithRelations | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [timelineKey, setTimelineKey] = useState(0)
 
   useEffect(() => {
     if (!id || !profile?.id) return
@@ -75,7 +78,19 @@ export default function BuyerInquiryDetailPage() {
       </Link>
 
       <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
-        <InquirySummary inquiry={inquiry} viewerRole="buyer" />
+        <div className="space-y-4">
+          <InquirySummary inquiry={inquiry} viewerRole="buyer" />
+          <StatusTimeline inquiryId={inquiry.id} refreshKey={timelineKey} />
+          <InquiryStatusControl
+            inquiryId={inquiry.id}
+            status={inquiry.status}
+            viewerRole="buyer"
+            onChanged={(next) => {
+              setInquiry((current) => (current ? { ...current, status: next } : current))
+              setTimelineKey((key) => key + 1)
+            }}
+          />
+        </div>
         <div className="overflow-hidden border border-border-cream">
           <ChatThread
             inquiryId={inquiry.id}

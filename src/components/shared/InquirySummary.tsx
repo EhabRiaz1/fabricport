@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { InquiryStatusBadge } from '@/components/shared/InquiryStatusBadge'
+import { useCounterparties } from '@/hooks/useCounterparties'
 import type { InquiryWithRelations } from '@/types/app'
 
 export interface InquirySummaryProps {
@@ -9,10 +10,18 @@ export interface InquirySummaryProps {
 }
 
 export function InquirySummary({ inquiry, viewerRole }: InquirySummaryProps) {
+  const { nameOf } = useCounterparties()
+
+  // For a supplier, `inquiry.buyer` is ALWAYS null: profiles_select_own_or_admin
+  // hides the buyer's row, so the nested join returns nothing and this panel used
+  // to render "—" where the buyer's name should be. suppliers rows are publicly
+  // readable when verified, so the buyer's side of this never had the problem.
   const counterparty =
     viewerRole === 'buyer'
-      ? inquiry.supplier?.brand_name
-      : inquiry.buyer?.company_name ?? inquiry.buyer?.full_name
+      ? inquiry.supplier?.brand_name ?? nameOf(inquiry.supplier_id, '—')
+      : inquiry.buyer?.company_name ??
+        inquiry.buyer?.full_name ??
+        nameOf(inquiry.buyer_id, '—')
 
   return (
     <Card>

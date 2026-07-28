@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { Fragment, useEffect, useState, type ReactNode } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
@@ -29,36 +29,68 @@ import { NotificationBell } from '@/components/shared/NotificationBell'
 import { CommandPalette, isMac } from '@/components/shared/CommandPalette'
 import { BrandLogo } from '@/components/layout/BrandLogo'
 
+// Items are grouped by the optional `section` field. The array stays flat and
+// section headings are emitted on change, so keep same-section items adjacent.
+// Leading items with no section render above the first heading.
 const PORTAL_NAV: Record<PortalZone, PortalNavItem[]> = {
   buyer: [
     { label: 'Dashboard', href: '/buyer/dashboard', icon: 'dashboard' },
-    { label: 'Marketplace', href: '/marketplace', icon: 'store' },
-    { label: 'Cart', href: '/buyer/cart', icon: 'cart' },
-    { label: 'Wishlist', href: '/buyer/wishlist', icon: 'heart' },
-    { label: 'Inquiries', href: '/buyer/inquiries', icon: 'messages' },
-    { label: 'Support', href: '/buyer/support', icon: 'support' },
-    { label: 'Settings', href: '/buyer/settings', icon: 'settings' },
+    { section: 'Shop', label: 'Marketplace', href: '/marketplace', icon: 'store' },
+    { section: 'Shop', label: 'Wishlist', href: '/buyer/wishlist', icon: 'heart' },
+    { section: 'Shop', label: 'Cart', href: '/buyer/cart', icon: 'cart' },
+    { section: 'Orders', label: 'Inquiries', href: '/buyer/inquiries', icon: 'messages' },
+    { section: 'Orders', label: 'Sample Requests', href: '/buyer/samples', icon: 'package' },
+    { section: 'Orders', label: 'Invoices', href: '/buyer/invoices', icon: 'file' },
+    { section: 'Account', label: 'Support', href: '/buyer/support', icon: 'support' },
+    { section: 'Account', label: 'Settings', href: '/buyer/settings', icon: 'settings' },
   ],
   supplier: [
     { label: 'Dashboard', href: '/supplier-portal/dashboard', icon: 'dashboard' },
     { label: 'Analytics', href: '/supplier-portal/analytics', icon: 'chart' },
-    { label: 'Inventory', href: '/supplier-portal/inventory', icon: 'package' },
-    { label: 'Catalogues', href: '/supplier-portal/catalogues', icon: 'link' },
-    { label: 'Inquiries', href: '/supplier-portal/inquiries', icon: 'messages' },
-    { label: 'Listing Requests', href: '/supplier-portal/listing-request', icon: 'clipboard' },
-    { label: 'Support', href: '/supplier-portal/support', icon: 'support' },
-    { label: 'Settings', href: '/supplier-portal/settings', icon: 'settings' },
+    { section: 'Catalog', label: 'Inventory', href: '/supplier-portal/inventory', icon: 'package' },
+    { section: 'Catalog', label: 'Catalogues', href: '/supplier-portal/catalogues', icon: 'link' },
+    {
+      section: 'Catalog',
+      label: 'Listing Requests',
+      href: '/supplier-portal/listing-request',
+      icon: 'clipboard',
+    },
+    { section: 'Orders', label: 'Inquiries', href: '/supplier-portal/inquiries', icon: 'messages' },
+    {
+      section: 'Orders',
+      label: 'Sample Requests',
+      href: '/supplier-portal/samples',
+      icon: 'package',
+    },
+    { section: 'Orders', label: 'Invoices', href: '/supplier-portal/invoices', icon: 'file' },
+    { section: 'Account', label: 'Support', href: '/supplier-portal/support', icon: 'support' },
+    { section: 'Account', label: 'Settings', href: '/supplier-portal/settings', icon: 'settings' },
   ],
   admin: [
     { label: 'Dashboard', href: '/admin/dashboard', icon: 'dashboard' },
+    // Reports sits next to Dashboard: both answer "how is the marketplace doing".
+    { label: 'Reports', href: '/admin/reports', icon: 'chart' },
     { label: 'Live Monitor', href: '/admin/live', icon: 'activity' },
-    { label: 'Products', href: '/admin/products', icon: 'package' },
-    { label: 'Suppliers', href: '/admin/suppliers', icon: 'store' },
-    { label: 'Users', href: '/admin/users', icon: 'users' },
-    { label: 'Messages', href: '/admin/messages', icon: 'messages' },
-    { label: 'Listing Pipeline', href: '/admin/listing-pipeline', icon: 'clipboard' },
-    { label: 'Attributes', href: '/admin/attributes', icon: 'file' },
-    { label: 'Settings', href: '/admin/settings', icon: 'settings' },
+    { section: 'Catalog', label: 'Products', href: '/admin/products', icon: 'package' },
+    { section: 'Catalog', label: 'Categories', href: '/admin/categories', icon: 'store' },
+    { section: 'Catalog', label: 'Attributes', href: '/admin/attributes', icon: 'file' },
+    {
+      section: 'Catalog',
+      label: 'Listing Pipeline',
+      href: '/admin/listing-pipeline',
+      icon: 'clipboard',
+    },
+    { section: 'People', label: 'Suppliers', href: '/admin/suppliers', icon: 'store' },
+    // /admin/buyers and /admin/inquiries were routed but absent from this nav,
+    // reachable only by typing the URL. Surfacing them here.
+    { section: 'People', label: 'Buyers', href: '/admin/buyers', icon: 'users' },
+    { section: 'People', label: 'Users', href: '/admin/users', icon: 'users' },
+    { section: 'Operations', label: 'Messages', href: '/admin/messages', icon: 'messages' },
+    { section: 'Operations', label: 'Inquiries', href: '/admin/inquiries', icon: 'clipboard' },
+    { section: 'Operations', label: 'Sample Requests', href: '/admin/samples', icon: 'package' },
+    // Invoices + Payments are one mental object, so one nav entry, two tabs.
+    { section: 'Operations', label: 'Billing', href: '/admin/billing', icon: 'file' },
+    { section: 'Account', label: 'Settings', href: '/admin/settings', icon: 'settings' },
   ],
 }
 
@@ -162,39 +194,46 @@ export function PortalShell({ children, zone, title, className }: PortalShellPro
         </p>
 
         <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 py-2">
-          {navItems.map((item) => {
+          {navItems.map((item, index) => {
             const Icon = ICON_MAP[item.icon as keyof typeof ICON_MAP] ?? LayoutDashboard
             const active =
               location.pathname === item.href ||
               (item.href !== '/marketplace' && location.pathname.startsWith(`${item.href}/`)) ||
               location.pathname === item.href.replace(/\/$/, '')
+            const startsSection = item.section != null && item.section !== navItems[index - 1]?.section
 
             return (
-              <Link
-                key={item.href}
-                to={item.href}
-                onClick={() => setSidebarOpen(false)}
-                className={cn(
-                  'group relative flex items-center gap-3 px-3 py-2.5 text-sm transition-colors',
-                  active
-                    ? 'bg-elevated font-medium text-text-primary'
-                    : 'text-text-secondary hover:bg-elevated/60 hover:text-text-primary',
+              <Fragment key={item.href}>
+                {startsSection && (
+                  <p className="px-3 pb-1 pt-4 font-mono text-[9px] uppercase tracking-[0.28em] text-text-muted">
+                    {item.section}
+                  </p>
                 )}
-              >
-                <span
+                <Link
+                  to={item.href}
+                  onClick={() => setSidebarOpen(false)}
                   className={cn(
-                    'absolute inset-y-1.5 left-0 w-[3px] bg-accent transition-opacity',
-                    active ? 'opacity-100' : 'opacity-0 group-hover:opacity-40',
+                    'group relative flex items-center gap-3 px-3 py-2.5 text-sm transition-colors',
+                    active
+                      ? 'bg-elevated font-medium text-text-primary'
+                      : 'text-text-secondary hover:bg-elevated/60 hover:text-text-primary',
                   )}
-                />
-                <Icon className={cn('h-4 w-4 shrink-0', active && 'text-accent')} />
-                <span>{item.label}</span>
-                {item.badge != null && item.badge > 0 && (
-                  <span className="ml-auto flex h-5 min-w-5 items-center justify-center bg-accent px-1.5 font-mono text-[10px] text-white">
-                    {item.badge}
-                  </span>
-                )}
-              </Link>
+                >
+                  <span
+                    className={cn(
+                      'absolute inset-y-1.5 left-0 w-[3px] bg-accent transition-opacity',
+                      active ? 'opacity-100' : 'opacity-0 group-hover:opacity-40',
+                    )}
+                  />
+                  <Icon className={cn('h-4 w-4 shrink-0', active && 'text-accent')} />
+                  <span>{item.label}</span>
+                  {item.badge != null && item.badge > 0 && (
+                    <span className="ml-auto flex h-5 min-w-5 items-center justify-center bg-accent px-1.5 font-mono text-[10px] text-white">
+                      {item.badge}
+                    </span>
+                  )}
+                </Link>
+              </Fragment>
             )
           })}
         </nav>

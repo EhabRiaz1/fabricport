@@ -186,9 +186,17 @@ function FabricCardComponent({
     ? `${metersToYards(product.stock_meters).toFixed(0)} yd`
     : `${product.stock_meters.toFixed(0)} m`
 
+  // Grid cards used to be `aspect-square` with the image box as the only flexible
+  // row, so the image height was (square - header - specs). A 2-line title or a
+  // missing supplier line changed the header height, which changed the image
+  // height, which is why photos looked rectangular in narrow columns and square in
+  // wide ones. Fix is structural: pin BOTH variable rows (title reserves 2 lines,
+  // supplier line always reserves its space), give the image a real aspect-square,
+  // and drop the card's own aspect ratio. Card height is then identical for every
+  // card by construction, so the grid stays uniform without the flex trap.
   const cardClassName = cn(
     'group relative flex flex-col clip-corner clip-corner-accent bg-card select-none transition-transform duration-200',
-    isGrid && 'aspect-square w-full overflow-hidden hover:-translate-y-1',
+    isGrid && 'w-full overflow-hidden hover:-translate-y-1',
     isFeatured && 'min-h-[420px]',
     !isGrid && !isFeatured && 'min-h-[340px]',
     className,
@@ -202,24 +210,35 @@ function FabricCardComponent({
             className={cn(
               'font-display font-semibold leading-tight text-text-dark transition-colors group-hover:text-accent line-clamp-2',
               isFeatured ? 'text-lg' : isGrid ? 'text-sm sm:text-base' : 'text-sm',
+              // Reserve two lines whether the title wraps or not.
+              isGrid && 'h-[2.1875rem] sm:h-[2.5rem]',
             )}
           >
             {product.title}
           </h3>
-          {product.supplier && (
-            <p className="mt-0.5 truncate font-mono text-[8px] uppercase tracking-[0.18em] text-text-dark-secondary">
-              {product.supplier.brand_name}
-              {product.supplier.is_verified && (
-                <span className="ml-1 text-accent">✓</span>
+          {/* In grid the element is always rendered so a supplier-less product does
+              not gift its row height to the image. */}
+          {(product.supplier || isGrid) && (
+            <p
+              className={cn(
+                'mt-0.5 truncate font-mono text-[8px] uppercase tracking-[0.18em] text-text-dark-secondary',
+                isGrid && 'h-[12px]',
               )}
+            >
+              {product.supplier?.brand_name}
+              {product.supplier?.is_verified && <span className="ml-1 text-accent">✓</span>}
             </p>
           )}
         </div>
 
-        {/* Image fills remaining square space */}
+        {/* Grid: a real square. Other variants keep their fixed heights. */}
         <div className={cn(
-          'relative min-h-0 flex-1 overflow-hidden bg-[#D8D4CC]',
-          isFeatured ? 'mx-4 my-3 h-48 shrink-0' : isGrid ? 'mx-3 mb-2' : 'mx-4 my-3 h-36 shrink-0',
+          'relative overflow-hidden bg-[#D8D4CC]',
+          isFeatured
+            ? 'mx-4 my-3 h-48 min-h-0 shrink-0 flex-1'
+            : isGrid
+              ? 'mx-3 mb-2 aspect-square shrink-0'
+              : 'mx-4 my-3 h-36 min-h-0 shrink-0 flex-1',
         )}>
           {imagePath ? (
             <ProductCardImage

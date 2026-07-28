@@ -23,6 +23,10 @@ import SuppliersPage from '@/pages/admin/SuppliersPage'
 import BuyersPage from '@/pages/admin/BuyersPage'
 import UsersPage from '@/pages/admin/UsersPage'
 import AdminMessagesPage from '@/pages/admin/MessagesPage'
+import AdminBillingPage from '@/pages/admin/BillingPage'
+import AdminReportsPage from '@/pages/admin/ReportsPage'
+import AdminCategoriesPage from '@/pages/admin/CategoriesPage'
+import AdminSampleRequestsPage from '@/pages/admin/SampleRequestsPage'
 import LiveMonitorPage from '@/pages/admin/LiveMonitorPage'
 import SupportPage from '@/pages/shared/SupportPage'
 import ListingPipelinePage from '@/pages/admin/ListingPipelinePage'
@@ -35,6 +39,10 @@ import BuyerCartPage from '@/pages/buyer/CartPage'
 import BuyerWishlistPage from '@/pages/buyer/WishlistPage'
 import BuyerInquiriesPage from '@/pages/buyer/InquiriesPage'
 import BuyerInquiryDetailPage from '@/pages/buyer/InquiryDetailPage'
+import BuyerInvoicesPage from '@/pages/buyer/InvoicesPage'
+import BuyerInvoiceDetailPage from '@/pages/buyer/InvoiceDetailPage'
+import BuyerSampleRequestsPage from '@/pages/buyer/SampleRequestsPage'
+import BuyerSampleRequestDetailPage from '@/pages/buyer/SampleRequestDetailPage'
 import BuyerSettingsPage from '@/pages/buyer/SettingsPage'
 import SupplierDashboardPage from '@/pages/supplier/DashboardPage'
 import SupplierAnalyticsPage from '@/pages/supplier/AnalyticsPage'
@@ -42,6 +50,9 @@ import SupplierInventoryPage from '@/pages/supplier/InventoryPage'
 import SupplierCataloguesPage from '@/pages/supplier/CataloguesPage'
 import SupplierInquiriesPage from '@/pages/supplier/InquiriesPage'
 import SupplierInquiryDetailPage from '@/pages/supplier/InquiryDetailPage'
+import SupplierInvoicesPage from '@/pages/supplier/InvoicesPage'
+import SupplierSampleRequestsPage from '@/pages/supplier/SampleRequestsPage'
+import SupplierSampleRequestDetailPage from '@/pages/supplier/SampleRequestDetailPage'
 import ListingRequestPage from '@/pages/supplier/ListingRequestPage'
 import InvoiceBuilderPage from '@/pages/supplier/InvoiceBuilderPage'
 import SupplierSettingsPage from '@/pages/supplier/SettingsPage'
@@ -100,6 +111,10 @@ export default function App() {
               <Route path="wishlist" element={<BuyerWishlistPage />} />
               <Route path="inquiries" element={<BuyerInquiriesPage />} />
               <Route path="inquiries/:id" element={<BuyerInquiryDetailPage />} />
+              <Route path="samples" element={<BuyerSampleRequestsPage />} />
+              <Route path="samples/:id" element={<BuyerSampleRequestDetailPage />} />
+              <Route path="invoices" element={<BuyerInvoicesPage />} />
+              <Route path="invoices/:id" element={<BuyerInvoiceDetailPage />} />
               <Route path="support" element={<SupportPage />} />
               <Route path="settings" element={<BuyerSettingsPage />} />
               <Route path="*" element={<PortalPlaceholder title="Buyer Portal" />} />
@@ -131,7 +146,10 @@ export default function App() {
               <Route path="catalogues" element={<SupplierCataloguesPage />} />
               <Route path="inquiries" element={<SupplierInquiriesPage />} />
               <Route path="inquiries/:id" element={<SupplierInquiryDetailPage />} />
+              <Route path="samples" element={<SupplierSampleRequestsPage />} />
+              <Route path="samples/:id" element={<SupplierSampleRequestDetailPage />} />
               <Route path="listing-request" element={<ListingRequestPage />} />
+              <Route path="invoices" element={<SupplierInvoicesPage />} />
               <Route path="invoices/new" element={<InvoiceBuilderPage />} />
               <Route path="support" element={<SupportPage />} />
               <Route path="settings" element={<SupplierSettingsPage />} />
@@ -152,6 +170,10 @@ export default function App() {
               <Route path="dashboard" element={<DashboardPage />} />
               <Route path="live" element={<LiveMonitorPage />} />
               <Route path="messages" element={<AdminMessagesPage />} />
+              <Route path="billing" element={<AdminBillingPage />} />
+              <Route path="reports" element={<AdminReportsPage />} />
+              <Route path="categories" element={<AdminCategoriesPage />} />
+              <Route path="samples" element={<AdminSampleRequestsPage />} />
               <Route path="products" element={<ProductsPage />} />
               <Route path="products/new" element={<ProductFormPage />} />
               <Route path="products/:id/edit" element={<ProductFormPage />} />

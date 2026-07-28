@@ -31,6 +31,49 @@ export function normalizeInquiry(raw: Record<string, unknown>): InquiryWithRelat
   }
 }
 
+export interface InquiryLineInput {
+  product_id: string
+  quantity_meters: number
+  notes?: string | null
+}
+
+export interface CreateInquiryInput {
+  supplierId: string
+  lines: InquiryLineInput[]
+  /** cart_items rows to clear in the same transaction; omit for a direct inquiry. */
+  cartItemIds?: string[]
+}
+
+/**
+ * Creates an inquiry and its items atomically via the `create_inquiry` RPC.
+ *
+ * Do NOT go back to client-side inserts: buyers have no DELETE policy on
+ * `inquiries`, so a partial failure there cannot be compensated and strands an
+ * empty inquiry. The RPC runs SECURITY INVOKER, so RLS is unchanged, and it
+ * rejects lines that don't belong to `supplierId`.
+ *
+ * @returns the new inquiry id
+ */
+export async function createInquiry({
+  supplierId,
+  lines,
+  cartItemIds,
+}: CreateInquiryInput): Promise<string> {
+  const { data, error } = await supabase.rpc('create_inquiry', {
+    p_supplier_id: supplierId,
+    p_lines: lines.map((line) => ({
+      product_id: line.product_id,
+      quantity_meters: line.quantity_meters,
+      notes: line.notes ?? null,
+    })),
+    p_cart_item_ids: cartItemIds ?? null,
+  })
+
+  if (error) throw new Error(error.message)
+  if (!data) throw new Error('Inquiry was not created')
+  return data as string
+}
+
 export async function countUnreadMessagesForBuyer(buyerId: string): Promise<number> {
   const { data: inquiries } = await supabase
     .from('inquiries')

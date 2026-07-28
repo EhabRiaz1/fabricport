@@ -4,24 +4,51 @@ import { Bell } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { cn } from '@/lib/utils'
-import type { Notification } from '@/types/database.types'
+import type { Notification, UserRole } from '@/types/database.types'
 import type { NotificationPayload } from '@/types/app'
 
 export interface NotificationBellProps {
   className?: string
 }
 
-function getNotificationHref(data: NotificationPayload | null): string | null {
+/**
+ * Notifications go to buyers, suppliers and admins alike, so the destination
+ * depends on WHO is reading. This used to hard-code the buyer path for every
+ * role, which sent a supplier to /buyer/inquiries/... and got them bounced
+ * straight back out by AuthGuard's zone check.
+ */
+function getNotificationHref(
+  data: NotificationPayload | null,
+  role: UserRole | null,
+): string | null {
   if (!data) return null
-  if (data.inquiry_id) return `/buyer/inquiries/${data.inquiry_id}`
+
+  if (data.inquiry_id) {
+    if (role === 'supplier') return `/supplier-portal/inquiries/${data.inquiry_id}`
+    if (role === 'admin') return `/admin/inquiries/${data.inquiry_id}`
+    return `/buyer/inquiries/${data.inquiry_id}`
+  }
+  if (data.sample_request_id) {
+    if (role === 'supplier') return `/supplier-portal/samples/${data.sample_request_id}`
+    return `/buyer/samples/${data.sample_request_id}`
+  }
+  // Was `/admin/invoices/:id`, a route that never existed — the admin catch-all
+  // silently swallowed it. Admin billing is a single list, buyers get the invoice.
+  if (data.invoice_id) {
+    if (role === 'admin') return '/admin/billing'
+    if (role === 'supplier') return `/supplier-portal/inquiries`
+    return `/buyer/invoices/${data.invoice_id}`
+  }
+  // listing_request_id is dispatched by the admin listing pipeline and read by
+  // the supplier; the old two-segment /supplier/listing-requests/:id matched no
+  // route at all and fell through to the global catch-all.
+  if (data.listing_request_id) return '/supplier-portal/listing-request'
   if (data.product_id) return `/fabric/${data.product_id}`
-  if (data.invoice_id) return `/admin/invoices/${data.invoice_id}`
-  if (data.listing_request_id) return `/supplier/listing-requests/${data.listing_request_id}`
   return null
 }
 
 export function NotificationBell({ className }: NotificationBellProps) {
-  const { user } = useAuth()
+  const { user, role } = useAuth()
   const [open, setOpen] = useState(false)
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [loading, setLoading] = useState(false)
@@ -135,7 +162,10 @@ export function NotificationBell({ className }: NotificationBellProps) {
               )}
 
               {notifications.map((notification) => {
-                const href = getNotificationHref(notification.data as NotificationPayload | null)
+                const href = getNotificationHref(
+                  notification.data as NotificationPayload | null,
+                  role,
+                )
                 const content = (
                   <div
                     className={cn(

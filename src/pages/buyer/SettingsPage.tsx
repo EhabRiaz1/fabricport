@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
+import { AddressBook } from '@/components/buyer/AddressBook'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -123,6 +124,8 @@ export default function BuyerSettingsPage() {
           </form>
         </CardContent>
       </Card>
+
+      {profile?.id && <AddressBook buyerId={profile.id} />}
     </div>
   )
 }

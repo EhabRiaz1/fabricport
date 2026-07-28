@@ -9,8 +9,11 @@ import { AttachmentList } from '@/components/chat/AttachmentList'
 import { uploadAttachments } from '@/lib/attachments'
 import type { Message } from '@/types/database.types'
 
-export interface ChatThreadProps {
-  inquiryId: string
+/**
+ * A thread hangs off exactly one parent — an inquiry or a sample request —
+ * mirroring the messages_exactly_one_thread CHECK constraint. Pass exactly one.
+ */
+export type ChatThreadProps = {
   currentUserId: string
   readOnly?: boolean
   className?: string
@@ -18,7 +21,10 @@ export interface ChatThreadProps {
   notifyUserId?: string
   /** Short sender label used in the notification copy. */
   notifyFromLabel?: string
-}
+} & (
+  | { inquiryId: string; sampleRequestId?: never }
+  | { sampleRequestId: string; inquiryId?: never }
+)
 
 function formatTime(iso: string) {
   return new Date(iso).toLocaleString(undefined, {
@@ -31,6 +37,7 @@ function formatTime(iso: string) {
 
 export function ChatThread({
   inquiryId,
+  sampleRequestId,
   currentUserId,
   readOnly = false,
   className,
@@ -41,6 +48,14 @@ export function ChatThread({
   const [loading, setLoading] = useState(true)
   const bottomRef = useRef<HTMLDivElement>(null)
 
+  // The four places this component was bound to inquiries: the load filter, the
+  // two realtime filters (+ channel name), the storage prefix, and the insert
+  // payload. All four now derive from whichever parent was passed.
+  const isSample = sampleRequestId != null
+  const threadColumn = isSample ? 'sample_request_id' : 'inquiry_id'
+  const threadId = (isSample ? sampleRequestId : inquiryId) as string
+  const storagePrefix = isSample ? `sample/${threadId}` : `inquiry/${threadId}`
+
   useEffect(() => {
     let mounted = true
 
@@ -49,7 +64,7 @@ export function ChatThread({
       const { data, error } = await supabase
         .from('messages')
         .select('*')
-        .eq('inquiry_id', inquiryId)
+        .eq(threadColumn, threadId)
         .order('created_at', { ascending: true })
 
       if (!mounted) return
@@ -61,14 +76,14 @@ export function ChatThread({
     loadMessages()
 
     const channel = supabase
-      .channel(`messages:${inquiryId}`)
+      .channel(`messages:${threadColumn}:${threadId}`)
       .on(
         'postgres_changes',
         {
           event: 'INSERT',
           schema: 'public',
           table: 'messages',
-          filter: `inquiry_id=eq.${inquiryId}`,
+          filter: `${threadColumn}=eq.${threadId}`,
         },
         (payload) => {
           const incoming = payload.new as Message
@@ -84,7 +99,7 @@ export function ChatThread({
           event: 'UPDATE',
           schema: 'public',
           table: 'messages',
-          filter: `inquiry_id=eq.${inquiryId}`,
+          filter: `${threadColumn}=eq.${threadId}`,
         },
         (payload) => {
           const updated = payload.new as Message
@@ -97,7 +112,7 @@ export function ChatThread({
       mounted = false
       void supabase.removeChannel(channel)
     }
-  }, [inquiryId])
+  }, [threadColumn, threadId])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -116,12 +131,11 @@ export function ChatThread({
   }, [messages, currentUserId])
 
   async function handleSend(content: string, files?: File[]) {
-    const attachments = files?.length
-      ? await uploadAttachments(files, `inquiry/${inquiryId}`)
-      : []
+    const attachments = files?.length ? await uploadAttachments(files, storagePrefix) : []
 
     const { error } = await supabase.from('messages').insert({
-      inquiry_id: inquiryId,
+      inquiry_id: isSample ? null : threadId,
+      sample_request_id: isSample ? threadId : null,
       sender_id: currentUserId,
       content,
       attachments,
@@ -139,7 +153,7 @@ export function ChatThread({
         type: 'message_received',
         title: `New message${notifyFromLabel ? ` from ${notifyFromLabel}` : ''}`,
         body: preview,
-        data: { inquiry_id: inquiryId },
+        data: isSample ? { sample_request_id: threadId } : { inquiry_id: threadId },
       }).catch(() => undefined)
     }
   }

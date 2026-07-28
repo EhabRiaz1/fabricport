@@ -82,6 +82,9 @@ export default function AdminMessagesPage() {
       supabase
         .from('messages')
         .select('inquiry_id, content, created_at')
+        // messages now also carry sample-request threads (inquiry_id null there);
+        // this console is the INQUIRY console, so exclude them at the query.
+        .not('inquiry_id', 'is', null)
         .order('created_at', { ascending: false })
         .limit(400),
       supabase
@@ -94,6 +97,8 @@ export default function AdminMessagesPage() {
     // Build inquiry conversations with last-message previews.
     const msgByInquiry = new Map<string, { content: string | null; at: string; count: number }>()
     for (const msg of messagesRes.data ?? []) {
+      // Belt and braces alongside the .not() filter above — inquiry_id is nullable now.
+      if (!msg.inquiry_id) continue
       const existing = msgByInquiry.get(msg.inquiry_id)
       if (existing) {
         existing.count++

@@ -5,10 +5,14 @@ import type {
   FabricCategory,
   Inquiry,
   InquiryItem,
+  Invoice,
   Message,
+  Payment,
   Product,
   ProductAttribute,
   Profile,
+  SampleRequest,
+  SampleRequestItem,
   Supplier,
   UserRole,
 } from '@/types/database.types'
@@ -75,6 +79,22 @@ export interface InquiryItemWithProduct extends InquiryItem {
   product?: ProductWithRelations
 }
 
+export interface InvoiceWithRelations extends Invoice {
+  buyer?: Profile
+  supplier?: Supplier
+  payments?: Payment[]
+}
+
+export interface SampleRequestWithRelations extends SampleRequest {
+  buyer?: Profile
+  supplier?: Supplier
+  items?: SampleRequestItemWithProduct[]
+}
+
+export interface SampleRequestItemWithProduct extends SampleRequestItem {
+  product?: ProductWithRelations
+}
+
 export interface CartItemWithProduct {
   id: string
   buyer_id: string
@@ -133,6 +153,7 @@ export interface ProductSpecRow {
 
 export interface NotificationPayload {
   inquiry_id?: string
+  sample_request_id?: string
   product_id?: string
   message_id?: string
   invoice_id?: string
@@ -160,6 +181,13 @@ export interface PortalNavItem {
   href: string
   icon?: string
   badge?: number
+  /**
+   * Optional grouping heading. The nav array stays FLAT — PortalShell renders a
+   * heading whenever this value changes between consecutive items, and consumers
+   * that don't care about grouping (CommandPalette) ignore it. Keep items of the
+   * same section adjacent, or the heading will repeat.
+   */
+  section?: string
 }
 
 export interface DashboardMetric {

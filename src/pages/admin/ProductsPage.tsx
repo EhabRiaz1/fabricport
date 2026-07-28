@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Pencil, Plus, Search, Star } from 'lucide-react'
+import { BadgeCheck, Pencil, Plus, Search, Star } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -8,7 +8,10 @@ import { Badge, StatusBadge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { supabase } from '@/lib/supabase'
+import { useAuth } from '@/contexts/AuthContext'
+import { toast } from '@/stores/toast'
 import { getProductImageUrl } from '@/lib/product-images'
+import { TestReportBadge } from '@/components/shared/TestReportBadge'
 import type { ProductWithRelations } from '@/types/app'
 import { AdminPageHeader } from './components/AdminPageHeader'
 import {
@@ -29,6 +32,8 @@ export default function ProductsPage() {
   const [updating, setUpdating] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+  const [priceFilter, setPriceFilter] = useState<'all' | 'pending'>('all')
+  const { user } = useAuth()
 
   const loadProducts = useCallback(async () => {
     setLoading(true)
@@ -89,9 +94,66 @@ export default function ProductsPage() {
     setUpdating(null)
   }
 
+  /**
+   * The one action that could not previously be performed anywhere in the app.
+   * The DB has had `price_approved` since day one, the supplier save clears it,
+   * the column guard raises 42501 if a non-admin tries to grant it, and the admin
+   * dashboard counts "price approvals needed" — but no UI could actually approve,
+   * and that dashboard alert linked here, to a page with no approval control.
+   */
+  async function togglePriceApproved(product: ProductWithRelations) {
+    setUpdating(product.id)
+    const next = !product.price_approved
+    const { error } = await supabase
+      .from('products')
+      .update({
+        price_approved: next,
+        price_approved_by: next ? user?.id ?? null : null,
+        price_approved_at: next ? new Date().toISOString() : null,
+      })
+      .eq('id', product.id)
+    setUpdating(null)
+
+    if (error) {
+      toast.error('Could not update price approval', error.message)
+      return
+    }
+    setProducts((prev) =>
+      prev.map((p) => (p.id === product.id ? { ...p, price_approved: next } : p)),
+    )
+    toast.success(next ? 'Price approved' : 'Approval withdrawn')
+  }
+
+  /** Cycles approved -> failed -> unset. Admin-only; the DB guard enforces it. */
+  async function cycleTestReport(product: ProductWithRelations) {
+    const next =
+      product.test_report_status === 'approved'
+        ? 'failed'
+        : product.test_report_status === 'failed'
+          ? null
+          : 'approved'
+
+    setUpdating(product.id)
+    const { error } = await supabase
+      .from('products')
+      .update({ test_report_status: next })
+      .eq('id', product.id)
+    setUpdating(null)
+
+    if (error) {
+      toast.error('Could not update test report', error.message)
+      return
+    }
+    setProducts((prev) =>
+      prev.map((p) => (p.id === product.id ? { ...p, test_report_status: next } : p)),
+    )
+  }
+
   const visibleProducts = useMemo(() => {
     const q = search.trim().toLowerCase()
     return products.filter((product) => {
+      if (priceFilter === 'pending' && (product.price_approved || product.price_min_pkr == null))
+        return false
       if (statusFilter !== 'all' && product.status !== statusFilter) return false
       if (!q) return true
       return (
@@ -100,7 +162,7 @@ export default function ProductsPage() {
         (product.supplier?.brand_name ?? '').toLowerCase().includes(q)
       )
     })
-  }, [products, search, statusFilter])
+  }, [products, search, statusFilter, priceFilter])
 
   return (
     <div>
@@ -145,6 +207,20 @@ export default function ProductsPage() {
             </button>
           ))}
         </div>
+        {/* The admin dashboard's "Price approvals needed" alert links to this
+            page — this is the filter that makes that link actionable. */}
+        <button
+          type="button"
+          onClick={() => setPriceFilter((f) => (f === 'pending' ? 'all' : 'pending'))}
+          className={cn(
+            'border px-3 py-2 font-mono text-[10px] uppercase tracking-[0.12em] transition-colors',
+            priceFilter === 'pending'
+              ? 'border-accent bg-accent text-white'
+              : 'border-border text-text-secondary hover:text-text-primary',
+          )}
+        >
+          Pending price approval
+        </button>
         {!loading && (
           <p className="ml-auto font-mono text-[10px] uppercase tracking-widest text-text-secondary">
             {visibleProducts.length} of {products.length}
@@ -170,6 +246,8 @@ export default function ProductsPage() {
                 <AdminTableHeaderCell>Status</AdminTableHeaderCell>
                 <AdminTableHeaderCell>Color</AdminTableHeaderCell>
                 <AdminTableHeaderCell>Featured</AdminTableHeaderCell>
+                <AdminTableHeaderCell>Price</AdminTableHeaderCell>
+                <AdminTableHeaderCell>Test report</AdminTableHeaderCell>
                 <AdminTableHeaderCell className="text-right">Actions</AdminTableHeaderCell>
               </AdminTableHead>
               <AdminTableBody>
@@ -222,6 +300,51 @@ export default function ProductsPage() {
                       >
                         <Star className={`h-4 w-4 ${product.is_featured ? 'fill-current' : ''}`} />
                       </Button>
+                    </AdminTableCell>
+                    <AdminTableCell>
+                      {product.price_min_pkr == null ? (
+                        <span className="font-mono text-[10px] uppercase tracking-widest text-text-dark-secondary">
+                          no price
+                        </span>
+                      ) : (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          disabled={updating === product.id}
+                          title={
+                            product.price_approved
+                              ? 'Approved — click to withdraw'
+                              : 'Approve this price'
+                          }
+                          onClick={() => togglePriceApproved(product)}
+                          className={
+                            product.price_approved ? 'text-success' : 'text-warning'
+                          }
+                        >
+                          <BadgeCheck
+                            className={`h-4 w-4 ${product.price_approved ? 'fill-current' : ''}`}
+                          />
+                          <span className="font-mono text-[10px] uppercase tracking-widest">
+                            {product.price_approved ? 'Approved' : 'Pending'}
+                          </span>
+                        </Button>
+                      )}
+                    </AdminTableCell>
+                    <AdminTableCell>
+                      <button
+                        type="button"
+                        disabled={updating === product.id}
+                        onClick={() => cycleTestReport(product)}
+                        title="Click to cycle: passed → failed → not tested"
+                      >
+                        {product.test_report_status ? (
+                          <TestReportBadge status={product.test_report_status} compact />
+                        ) : (
+                          <span className="font-mono text-[9px] uppercase tracking-widest text-text-muted">
+                            not tested
+                          </span>
+                        )}
+                      </button>
                     </AdminTableCell>
                     <AdminTableCell className="text-right">
                       <div className="flex items-center justify-end gap-2">

@@ -26,6 +26,7 @@ import type {
   Json,
   ProductAttribute,
 } from '@/types/database.types'
+import { FabricGroupPicker } from '@/components/admin/FabricGroupPicker'
 import { AdminPageHeader } from './components/AdminPageHeader'
 
 function slugify(text: string) {
@@ -62,6 +63,7 @@ export default function ProductFormPage() {
   const [slug, setSlug] = useState('')
   const [description, setDescription] = useState('')
   const [supplierId, setSupplierId] = useState('')
+  const [fabricGroupId, setFabricGroupId] = useState<string | null>(null)
   const [categoryId, setCategoryId] = useState('')
   const [stockMeters, setStockMeters] = useState('')
   const [moqMeters, setMoqMeters] = useState('')
@@ -135,6 +137,7 @@ export default function ProductFormPage() {
       setSlug(data.slug)
       setDescription(data.description ?? '')
       setSupplierId(data.supplier_id)
+      setFabricGroupId(data.fabric_group_id ?? null)
       setCategoryId(data.category_id ?? '')
       setStockMeters(String(data.stock_meters))
       setMoqMeters(data.moq_meters != null ? String(data.moq_meters) : '')
@@ -349,6 +352,7 @@ export default function ProductFormPage() {
       slug: slug.trim(),
       description: description.trim() || null,
       supplier_id: supplierId,
+      fabric_group_id: fabricGroupId,
       category_id: categoryId || null,
       stock_meters: Number(stockMeters) || 0,
       moq_meters: moqMeters ? Number(moqMeters) : null,
@@ -488,6 +492,11 @@ export default function ProductFormPage() {
                   </SelectContent>
                 </Select>
               </div>
+              <FabricGroupPicker
+                supplierId={supplierId}
+                value={fabricGroupId}
+                onChange={setFabricGroupId}
+              />
               <div className="space-y-2">
                 <Label>Category</Label>
                 <Select value={categoryId} onValueChange={setCategoryId}>

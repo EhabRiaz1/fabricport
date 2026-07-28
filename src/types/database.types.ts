@@ -24,6 +24,9 @@ export type ProductStatus =
   | 'published'
   | 'archived'
 export type ProductVisibility = 'public' | 'private'
+
+/** Independent lab test outcome. Admin-set; suppliers cannot self-certify. */
+export type TestReportStatus = 'approved' | 'failed'
 export type ListingRequestStatus =
   | 'submitted'
   | 'fabric_received'
@@ -31,7 +34,61 @@ export type ListingRequestStatus =
   | 'complete'
   | 'rejected'
 export type InquiryStatus = 'open' | 'responded' | 'negotiating' | 'closed' | 'archived'
+
+/**
+ * Sibling of InquiryStatus, deliberately NOT folded into it: 10 files depend on
+ * InquiryStatus' current members, and a sample follows a linear fulfilment path
+ * rather than a negotiation. Keep in step with the sample_requests CHECK
+ * constraint and the guard_sample_request_columns trigger.
+ */
+export type SampleRequestStatus =
+  | 'requested'
+  | 'approved'
+  | 'shipped'
+  | 'delivered'
+  | 'declined'
+  | 'cancelled'
+
+/** Address as captured at request time. Frozen; never re-read from the address book. */
+export interface ShipToSnapshot {
+  recipient_name: string
+  phone?: string | null
+  line1: string
+  line2?: string | null
+  city: string
+  province?: string | null
+  postal_code?: string | null
+  country?: string | null
+}
 export type InvoiceStatus = 'draft' | 'sent' | 'acknowledged' | 'cancelled'
+
+/** Separate axis from InvoiceStatus: an invoice can be `sent` and `partial`. */
+export type PaymentStatus = 'unpaid' | 'partial' | 'paid'
+
+export type PaymentMethod = 'bank_transfer' | 'cash' | 'cheque' | 'card' | 'other'
+
+/** Shape returned by the get_admin_report_stats RPC. */
+export interface AdminReportStats {
+  inquiries_per_week: { week: string; count: number }[]
+  supplier_response_rate: number | null
+  median_first_response_hours: number | null
+  overdue_amount_pkr: number
+  outstanding_amount_pkr: number
+  collected_amount_pkr: number
+  top_fabrics: { title: string; slug: string; inquiries: number }[]
+  top_suppliers: { brand_name: string; inquiries: number }[]
+  funnel: {
+    product_views: number
+    unique_view_sessions: number
+    inquiries: number
+    sample_requests: number
+    supplier_responses: number
+    /** Outbound notifications sent, NOT click-throughs — see the migration note. */
+    whatsapp_notifications_sent: number
+  }
+  buyer_conversion: { buyers_total: number; buyers_with_inquiry: number }
+  pending_price_approvals: number
+}
 
 export interface PhoneNumber {
   label: string
@@ -100,6 +157,8 @@ export interface Database {
           phone_numbers: PhoneNumber[]
           whatsapp_numbers: WhatsappNumber[]
           status: ProfileStatus
+          overdue_flagged: boolean
+          overdue_flagged_at: string | null
           created_at: string
         }
         Insert: {
@@ -122,6 +181,8 @@ export interface Database {
           phone_numbers?: PhoneNumber[]
           whatsapp_numbers?: WhatsappNumber[]
           status?: ProfileStatus
+          overdue_flagged?: boolean
+          overdue_flagged_at?: string | null
           created_at?: string
         }
         Relationships: []
@@ -332,6 +393,9 @@ export interface Database {
           color_rgb: [number, number, number] | null
           color_family: string | null
           color_sample: ColorSamplePoint | null
+          /** Colourway family. Null for standalone fabrics — the vast majority. */
+          fabric_group_id: string | null
+          test_report_status: TestReportStatus | null
           is_featured: boolean
           view_count: number
           inquiry_count: number
@@ -372,6 +436,8 @@ export interface Database {
           color_rgb?: [number, number, number] | null
           color_family?: string | null
           color_sample?: ColorSamplePoint | null
+          fabric_group_id?: string | null
+          test_report_status?: TestReportStatus | null
           is_featured?: boolean
           view_count?: number
           inquiry_count?: number
@@ -412,6 +478,8 @@ export interface Database {
           color_rgb?: [number, number, number] | null
           color_family?: string | null
           color_sample?: ColorSamplePoint | null
+          fabric_group_id?: string | null
+          test_report_status?: TestReportStatus | null
           is_featured?: boolean
           view_count?: number
           inquiry_count?: number
@@ -635,6 +703,30 @@ export interface Database {
           },
         ]
       }
+      inquiry_status_events: {
+        Row: {
+          id: string
+          inquiry_id: string
+          from_status: InquiryStatus | null
+          to_status: InquiryStatus
+          /** null for pre-trigger backfilled rows and service-role changes */
+          actor_id: string | null
+          created_at: string
+        }
+        // Written only by the log_inquiry_status_event trigger. There is no
+        // INSERT/UPDATE/DELETE policy, so client writes always fail.
+        Insert: never
+        Update: never
+        Relationships: [
+          {
+            foreignKeyName: 'inquiry_status_events_inquiry_id_fkey'
+            columns: ['inquiry_id']
+            isOneToOne: false
+            referencedRelation: 'inquiries'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       inquiry_items: {
         Row: {
           id: string
@@ -738,9 +830,12 @@ export interface Database {
         Relationships: []
       }
       messages: {
+        // A message hangs off EXACTLY ONE of inquiry_id / sample_request_id --
+        // enforced by the messages_exactly_one_thread CHECK constraint.
         Row: {
           id: string
-          inquiry_id: string
+          inquiry_id: string | null
+          sample_request_id: string | null
           sender_id: string
           content: string | null
           attachments: MessageAttachment[]
@@ -749,7 +844,8 @@ export interface Database {
         }
         Insert: {
           id?: string
-          inquiry_id: string
+          inquiry_id?: string | null
+          sample_request_id?: string | null
           sender_id: string
           content?: string | null
           attachments?: MessageAttachment[]
@@ -758,7 +854,8 @@ export interface Database {
         }
         Update: {
           id?: string
-          inquiry_id?: string
+          inquiry_id?: string | null
+          sample_request_id?: string | null
           sender_id?: string
           content?: string | null
           attachments?: MessageAttachment[]
@@ -774,10 +871,166 @@ export interface Database {
             referencedColumns: ['id']
           },
           {
+            foreignKeyName: 'messages_sample_request_id_fkey'
+            columns: ['sample_request_id']
+            isOneToOne: false
+            referencedRelation: 'sample_requests'
+            referencedColumns: ['id']
+          },
+          {
             foreignKeyName: 'messages_sender_id_fkey'
             columns: ['sender_id']
             isOneToOne: false
             referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      shipping_addresses: {
+        Row: {
+          id: string
+          buyer_id: string
+          label: string | null
+          recipient_name: string
+          phone: string | null
+          line1: string
+          line2: string | null
+          city: string
+          province: string | null
+          postal_code: string | null
+          country: string
+          is_default: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          buyer_id: string
+          label?: string | null
+          recipient_name: string
+          phone?: string | null
+          line1: string
+          line2?: string | null
+          city: string
+          province?: string | null
+          postal_code?: string | null
+          country?: string
+          is_default?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          buyer_id?: string
+          label?: string | null
+          recipient_name?: string
+          phone?: string | null
+          line1?: string
+          line2?: string | null
+          city?: string
+          province?: string | null
+          postal_code?: string | null
+          country?: string
+          is_default?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'shipping_addresses_buyer_id_fkey'
+            columns: ['buyer_id']
+            isOneToOne: false
+            referencedRelation: 'buyers'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      sample_requests: {
+        Row: {
+          id: string
+          buyer_id: string
+          supplier_id: string
+          status: SampleRequestStatus
+          /** Snapshot of the address at request time -- NOT a live FK. */
+          ship_to: ShipToSnapshot
+          courier: string | null
+          tracking_number: string | null
+          buyer_notes: string | null
+          supplier_notes: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          buyer_id: string
+          supplier_id: string
+          status?: SampleRequestStatus
+          ship_to: ShipToSnapshot
+          courier?: string | null
+          tracking_number?: string | null
+          buyer_notes?: string | null
+          supplier_notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          status?: SampleRequestStatus
+          courier?: string | null
+          tracking_number?: string | null
+          buyer_notes?: string | null
+          supplier_notes?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'sample_requests_buyer_id_fkey'
+            columns: ['buyer_id']
+            isOneToOne: false
+            referencedRelation: 'buyers'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'sample_requests_supplier_id_fkey'
+            columns: ['supplier_id']
+            isOneToOne: false
+            referencedRelation: 'suppliers'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      sample_request_items: {
+        Row: {
+          id: string
+          sample_request_id: string
+          product_id: string
+          notes: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          sample_request_id: string
+          product_id: string
+          notes?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          notes?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'sample_request_items_sample_request_id_fkey'
+            columns: ['sample_request_id']
+            isOneToOne: false
+            referencedRelation: 'sample_requests'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'sample_request_items_product_id_fkey'
+            columns: ['product_id']
+            isOneToOne: false
+            referencedRelation: 'products'
             referencedColumns: ['id']
           },
         ]
@@ -928,6 +1181,83 @@ export interface Database {
           },
         ]
       }
+      fabric_groups: {
+        Row: {
+          id: string
+          supplier_id: string
+          title: string
+          slug: string
+          created_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          supplier_id: string
+          title: string
+          slug: string
+          created_by?: string | null
+        }
+        Update: {
+          title?: string
+          slug?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'fabric_groups_supplier_id_fkey'
+            columns: ['supplier_id']
+            isOneToOne: false
+            referencedRelation: 'suppliers'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      payments: {
+        Row: {
+          id: string
+          invoice_id: string
+          /** Derived from the invoice by set_payment_parties — never client-supplied. */
+          buyer_id: string
+          supplier_id: string
+          amount_pkr: number
+          paid_on: string
+          method: string | null
+          reference: string | null
+          provider: string | null
+          provider_payment_id: string | null
+          provider_status: string | null
+          raw: Json | null
+          recorded_by: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          invoice_id: string
+          amount_pkr: number
+          paid_on?: string
+          method?: string | null
+          reference?: string | null
+          // buyer_id/supplier_id/recorded_by are filled by the trigger.
+          buyer_id?: string
+          supplier_id?: string
+          recorded_by?: string | null
+        }
+        Update: {
+          amount_pkr?: number
+          paid_on?: string
+          method?: string | null
+          reference?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'payments_invoice_id_fkey'
+            columns: ['invoice_id']
+            isOneToOne: false
+            referencedRelation: 'invoices'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       invoices: {
         Row: {
           id: string
@@ -942,6 +1272,12 @@ export interface Database {
           pdf_url: string | null
           created_at: string
           sent_at: string | null
+          /** Stamped on send (sent_at + 30 days). Null while draft. */
+          due_date: string | null
+          /** DERIVED by the payments trigger — never write from a client. */
+          amount_paid_pkr: number
+          /** DERIVED by the payments trigger — never write from a client. */
+          payment_status: PaymentStatus
         }
         Insert: {
           id?: string
@@ -957,19 +1293,17 @@ export interface Database {
           created_at?: string
           sent_at?: string | null
         }
+        // due_date / amount_paid_pkr / payment_status are intentionally absent:
+        // the guard trigger rejects non-admin writes and the payments trigger owns
+        // the derived pair. Keeping them out makes that a compile error.
         Update: {
           id?: string
-          inquiry_id?: string
-          supplier_id?: string
-          buyer_id?: string
           line_items?: InvoiceLineItem[]
           subtotal_pkr?: number | null
           subtotal_usd?: number | null
           notes?: string | null
           status?: InvoiceStatus
           pdf_url?: string | null
-          created_at?: string
-          sent_at?: string | null
         }
         Relationships: [
           {
@@ -1264,6 +1598,36 @@ export interface Database {
         Args: { p_token: string }
         Returns: Json
       }
+      get_admin_report_stats: {
+        Args: { p_weeks?: number }
+        Returns: AdminReportStats
+      }
+      get_overdue_buyers: {
+        Args: Record<string, never>
+        Returns: {
+          buyer_id: string
+          full_name: string | null
+          company_name: string | null
+          overdue_flagged: boolean
+          status: ProfileStatus
+          overdue_invoices: number
+          overdue_amount_pkr: number
+          oldest_due_date: string | null
+        }[]
+      }
+      get_counterparty_profiles: {
+        Args: Record<string, never>
+        Returns: { id: string; full_name: string | null; company_name: string | null }[]
+      }
+      create_inquiry: {
+        Args: {
+          p_supplier_id: string
+          p_lines: { product_id: string; quantity_meters: number; notes: string | null }[]
+          p_cart_item_ids?: string[] | null
+        }
+        /** the new inquiry id */
+        Returns: string
+      }
     }
     Enums: Record<string, never>
     CompositeTypes: Record<string, never>
@@ -1291,11 +1655,16 @@ export type ProductPrivateDomain = Tables<'product_private_domains'>
 export type ListingRequest = Tables<'listing_requests'>
 export type Inquiry = Tables<'inquiries'>
 export type InquiryItem = Tables<'inquiry_items'>
+export type InquiryStatusEvent = Tables<'inquiry_status_events'>
+export type ShippingAddress = Tables<'shipping_addresses'>
+export type SampleRequest = Tables<'sample_requests'>
+export type SampleRequestItem = Tables<'sample_request_items'>
 export type Message = Tables<'messages'>
 export type SupportMessage = Tables<'support_messages'>
 export type AdminAuditLog = Tables<'admin_audit_log'>
 export type CartItem = Tables<'cart_items'>
 export type Invoice = Tables<'invoices'>
+export type Payment = Tables<'payments'>
 export type Notification = Tables<'notifications'>
 export type RecentView = Tables<'recent_views'>
 export type PagePresence = Tables<'page_presence'>

@@ -7,6 +7,9 @@ import { ErrorBoundary } from '@/components/shared/ErrorBoundary'
 import { Toaster } from '@/components/ui/toaster'
 import { PortalShell } from '@/components/layout/PortalShell'
 import { WishlistSync } from '@/components/marketplace/WishlistSync'
+import { CartSync } from '@/components/cart/CartSync'
+import { CartDrawer } from '@/components/cart/CartDrawer'
+import { SupportWidget } from '@/components/support/SupportWidget'
 const HomePage = lazy(() => import('@/pages/public/HomePage'))
 const MarketplacePage = lazy(() => import('@/pages/public/MarketplacePage'))
 const FabricDetailPage = lazy(() => import('@/pages/public/FabricDetailPage'))
@@ -109,6 +112,7 @@ export default function App() {
     <ErrorBoundary>
       <AuthProvider>
         <WishlistSync />
+        <CartSync />
         <BrowserRouter>
         <SmoothScroll>
           <Suspense fallback={<RouteFallback />}>
@@ -228,6 +232,9 @@ export default function App() {
           </Routes>
           </Suspense>
         </SmoothScroll>
+        {/* Inside BrowserRouter: the drawer navigates after submitting. */}
+        <CartDrawer />
+        <SupportWidget />
         <Toaster />
         </BrowserRouter>
       </AuthProvider>

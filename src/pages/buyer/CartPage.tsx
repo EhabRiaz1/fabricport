@@ -7,18 +7,12 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useProfile } from '@/hooks/useProfile'
+import { useCartStore } from '@/stores/cart'
 import { createInquiry } from '@/lib/inquiries'
 import { dispatchNotification } from '@/lib/notifications'
-import { supabase } from '@/lib/supabase'
 import { formatPrice, getProductImageUrl } from '@/lib/utils'
 import { toast } from '@/stores/toast'
-import type { CartGroupBySupplier, CartItemWithProduct } from '@/types/app'
-
-const PRODUCT_SELECT = `
-  *,
-  supplier:suppliers(*),
-  category:fabric_categories(*)
-`
+import type { CartGroupBySupplier } from '@/types/app'
 
 function groupEstimate(group: CartGroupBySupplier): number {
   return group.items.reduce((sum, item) => {
@@ -30,8 +24,21 @@ function groupEstimate(group: CartGroupBySupplier): number {
 export default function CartPage() {
   const { profile } = useProfile()
   const navigate = useNavigate()
-  const [items, setItems] = useState<CartItemWithProduct[]>([])
-  const [loading, setLoading] = useState(true)
+  /**
+   * Reads from the shared cart store rather than its own fetch.
+   *
+   * Two sources of truth meant the nav badge went stale the moment someone edited here.
+   * `load()` deliberately keeps rows whose product.supplier is null so the "unavailable
+   * items" recovery block below still has something to show.
+   */
+  const items = useCartStore((s) => s.lines)
+  const storeLoading = useCartStore((s) => s.loading)
+  const storeLoaded = useCartStore((s) => s.loaded)
+  const load = useCartStore((s) => s.load)
+  const storeSetQuantity = useCartStore((s) => s.setQuantity)
+  const storeSetNotes = useCartStore((s) => s.setNotes)
+  const storeRemove = useCartStore((s) => s.remove)
+  const loading = storeLoading || !storeLoaded
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -39,21 +46,8 @@ export default function CartPage() {
 
   const loadCart = useCallback(async () => {
     if (!profileId) return
-    setLoading(true)
-    const { data, error: fetchError } = await supabase
-      .from('cart_items')
-      .select(`*, product:products(${PRODUCT_SELECT})`)
-      .eq('buyer_id', profileId)
-      .order('created_at', { ascending: false })
-
-    if (fetchError) {
-      setError(fetchError.message)
-      setItems([])
-    } else {
-      setItems((data ?? []) as CartItemWithProduct[])
-    }
-    setLoading(false)
-  }, [profileId])
+    await load(profileId)
+  }, [profileId, load])
 
   useEffect(() => {
     loadCart()
@@ -84,27 +78,34 @@ export default function CartPage() {
   // never submitted, never deleted, invisible in the UI, stuck in the cart forever.
   const unavailableItems = useMemo(() => items.filter((item) => !item.product?.supplier), [items])
 
+  // Writes go through the store so the nav badge and the drawer stay in step. The store
+  // is keyed on product_id; this page still identifies rows by cart_item id.
   async function updateItem(
     id: string,
     patch: { quantity_meters?: number; notes?: string | null },
   ) {
-    const { error: updateError } = await supabase.from('cart_items').update(patch).eq('id', id)
-    if (updateError) {
-      setError(updateError.message)
-      return
+    const row = items.find((item) => item.id === id)
+    if (!row) return
+    try {
+      if (patch.quantity_meters != null) {
+        await storeSetQuantity(row.product_id, patch.quantity_meters)
+      }
+      if (patch.notes !== undefined) {
+        await storeSetNotes(row.product_id, patch.notes ?? '')
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not update the cart')
     }
-    setItems((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, ...patch } : item)),
-    )
   }
 
   async function removeItem(id: string) {
-    const { error: deleteError } = await supabase.from('cart_items').delete().eq('id', id)
-    if (deleteError) {
-      setError(deleteError.message)
-      return
+    const row = items.find((item) => item.id === id)
+    if (!row) return
+    try {
+      await storeRemove(row.product_id)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not remove the item')
     }
-    setItems((prev) => prev.filter((item) => item.id !== id))
   }
 
   async function submitAllInquiries() {

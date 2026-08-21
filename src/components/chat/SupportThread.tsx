@@ -18,6 +18,8 @@ export interface SupportThreadProps {
   isAdminView?: boolean
   className?: string
   emptyHint?: string
+  /** Slim the composer for the floating widget. */
+  compact?: boolean
 }
 
 function formatTime(iso: string) {
@@ -35,10 +37,11 @@ export function SupportThread({
   isAdminView = false,
   className,
   emptyHint = 'No messages yet. Our team typically replies within a few hours.',
+  compact = false,
 }: SupportThreadProps) {
   const [messages, setMessages] = useState<SupportMessage[]>([])
   const [loading, setLoading] = useState(true)
-  const bottomRef = useRef<HTMLDivElement>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     let mounted = true
@@ -84,19 +87,36 @@ export function SupportThread({
     }
   }, [threadUserId])
 
+  /**
+   * Scroll the message list, not the page.
+   *
+   * This used to call bottomRef.scrollIntoView(), which scrolls the nearest scrollable
+   * ancestor chain -- including the document. Inside the floating widget that yanks the
+   * whole marketplace on every incoming message.
+   *
+   * Only auto-scrolls when the reader is already near the bottom, so arriving messages
+   * don't rip someone away from scrollback they are reading.
+   */
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    const el = scrollRef.current
+    if (!el) return
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 120
+    if (nearBottom || messages.length === 0) el.scrollTop = el.scrollHeight
   }, [messages])
 
-  // Mark messages from the other party as read.
+  // Mark messages from the other party as read -- one statement, not one per message.
+  // The previous version fired N UPDATEs; with a widget mounted on every public page that
+  // is N requests every time the panel opens. Same rows the policy already permits.
   useEffect(() => {
     const unread = messages.filter((m) => m.sender_id !== currentUserId && m.read_at == null)
     if (unread.length === 0) return
-    const now = new Date().toISOString()
-    unread.forEach((msg) => {
-      void supabase.from('support_messages').update({ read_at: now }).eq('id', msg.id)
-    })
-  }, [messages, currentUserId])
+    void supabase
+      .from('support_messages')
+      .update({ read_at: new Date().toISOString() })
+      .eq('user_id', threadUserId)
+      .neq('sender_id', currentUserId)
+      .is('read_at', null)
+  }, [messages, currentUserId, threadUserId])
 
   async function handleSend(content: string, files?: File[]) {
     const attachments = files?.length
@@ -129,7 +149,11 @@ export function SupportThread({
 
   return (
     <div className={cn('flex h-full min-h-[420px] flex-col overflow-hidden bg-card', className)}>
-      <div className="flex-1 space-y-3 overflow-y-auto p-4">
+      <div
+        ref={scrollRef}
+        data-lenis-prevent
+        className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-4"
+      >
         {loading ? (
           <div className="space-y-3">
             <Skeleton className="h-12 w-2/3" />
@@ -179,12 +203,12 @@ export function SupportThread({
             )
           })
         )}
-        <div ref={bottomRef} />
       </div>
 
       <MessageInput
         onSend={handleSend}
         disabled={loading}
+        compact={compact}
         placeholder={isAdminView ? 'Message this user…' : 'Ask the FabricPort team anything…'}
       />
     </div>

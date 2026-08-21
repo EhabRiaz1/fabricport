@@ -21,7 +21,6 @@ import { fetchOpenSampleProductIds } from '@/lib/samples'
 import { SampleRequestDialog } from '@/components/marketplace/SampleRequestDialog'
 import { dispatchNotification } from '@/lib/notifications'
 import { trackSupplierView, usePagePresence } from '@/lib/track'
-import { supabase } from '@/lib/supabase'
 import {
   cn,
   formatPrice,
@@ -29,6 +28,8 @@ import {
   metersToYards,
 } from '@/lib/utils'
 import { usePreferencesStore } from '@/stores/preferences'
+import { useCartStore } from '@/stores/cart'
+import { useCartUI } from '@/lib/cart'
 import { toast } from '@/stores/toast'
 import type { ProductSpecRow } from '@/types/app'
 
@@ -52,6 +53,8 @@ export default function FabricDetailPage() {
   const [activeImage, setActiveImage] = useState(0)
   const [showVideo, setShowVideo] = useState(false)
   const [viewerOpen, setViewerOpen] = useState(false)
+  const addToCart = useCartStore((s) => s.add)
+  const setCartOpen = useCartUI((s) => s.setOpen)
   const [quantity, setQuantity] = useState(1)
   const [fxRate, setFxRate] = useState(278)
   const [adding, setAdding] = useState(false)
@@ -201,28 +204,26 @@ export default function FabricDetailPage() {
   }
 
   async function handleAddToCart() {
-    if (!product || !ensureBuyer() || !user) return
+    if (!product) return
 
-    setAdding(true)
-
-    const { error: cartError } = await supabase.from('cart_items').upsert(
-      {
-        buyer_id: user.id,
-        product_id: product.id,
-        quantity_meters: orderQuantity,
-      },
-      { onConflict: 'buyer_id,product_id' },
-    )
-
-    setAdding(false)
-
-    if (cartError) {
-      toast.error('Could not add to cart', cartError.message)
+    // Signed-out visitors get a local cart rather than a redirect. The store persists it and
+    // CartSync folds it into cart_items on sign-in, so nobody loses a selection to a login.
+    if (!isAuthenticated) {
+      await addToCart(product, orderQuantity)
+      setCartOpen(true)
       return
     }
+    if (!ensureBuyer()) return
 
-    // Upsert REPLACES the quantity rather than accumulating, so say so.
-    toast.success('In your cart', `${product.title} · ${orderQuantity} m`)
+    setAdding(true)
+    try {
+      await addToCart(product, orderQuantity)
+      setCartOpen(true)
+    } catch (err) {
+      toast.error('Could not add to cart', err instanceof Error ? err.message : 'Try again.')
+    } finally {
+      setAdding(false)
+    }
   }
 
   function handleRequestSample() {

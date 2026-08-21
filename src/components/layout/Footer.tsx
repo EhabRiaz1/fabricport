@@ -1,24 +1,33 @@
 import { Link } from 'react-router-dom'
 import { cn } from '@/lib/utils'
+import { useSupportUI } from '@/lib/support-ui'
 
+/**
+ * The "Company" column used to point at /about, /contact and /privacy. None of those are
+ * routes in App.tsx, so all three fell through the `*` catch-all and silently redirected to
+ * the home page. Rather than stub three pages, the column is now a real way to reach us --
+ * which also gives the support widget a second entry point for anyone who scrolls past the
+ * bubble without noticing it.
+ */
 const FOOTER_LINKS = {
   Platform: [
     { label: 'Marketplace', href: '/marketplace' },
     { label: 'Vendors', href: '/vendors' },
     { label: 'Join as Supplier', href: '/auth/register' },
   ],
-  Company: [
-    { label: 'About', href: '/about' },
-    { label: 'Contact', href: '/contact' },
-    { label: 'Privacy', href: '/privacy' },
-  ],
 } as const
+
+const WHATSAPP_HREF = `https://wa.me/923268419823?text=${encodeURIComponent(
+  'Hi FabricPort — I have a question.',
+)}`
 
 export interface FooterProps {
   className?: string
 }
 
 export function Footer({ className }: FooterProps) {
+  const setSupportOpen = useSupportUI((s) => s.setOpen)
+
   return (
     <footer className={cn('relative border-t border-[#3C2A1A]/10 bg-[#E2D9C8] overflow-hidden', className)}>
       <div className="relative mx-auto max-w-7xl px-6 pt-16 pb-10 lg:px-8">
@@ -55,6 +64,41 @@ export function Footer({ className }: FooterProps) {
               </ul>
             </div>
           ))}
+
+          <div>
+            <h4 className="font-mono text-[9px] uppercase tracking-[0.2em] text-[#3C2A1A]/40">
+              Talk to us
+            </h4>
+            <ul className="mt-5 space-y-3">
+              <li>
+                <button
+                  type="button"
+                  onClick={() => setSupportOpen(true)}
+                  className="text-left text-sm text-[#3C2A1A]/55 transition-colors hover:text-[#7A4A28]"
+                >
+                  Chat with the team
+                </button>
+              </li>
+              <li>
+                <a
+                  href={WHATSAPP_HREF}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-sm text-[#3C2A1A]/55 transition-colors hover:text-[#7A4A28]"
+                >
+                  WhatsApp
+                </a>
+              </li>
+              <li>
+                <a
+                  href="mailto:hello@fabricport.com"
+                  className="text-sm text-[#3C2A1A]/55 transition-colors hover:text-[#7A4A28]"
+                >
+                  hello@fabricport.com
+                </a>
+              </li>
+            </ul>
+          </div>
         </div>
 
         <div className="mt-8 flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">

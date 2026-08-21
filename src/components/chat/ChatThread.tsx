@@ -46,7 +46,7 @@ export function ChatThread({
 }: ChatThreadProps) {
   const [messages, setMessages] = useState<Message[]>([])
   const [loading, setLoading] = useState(true)
-  const bottomRef = useRef<HTMLDivElement>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
 
   // The four places this component was bound to inquiries: the load filter, the
   // two realtime filters (+ channel name), the storage prefix, and the insert
@@ -115,7 +115,11 @@ export function ChatThread({
   }, [threadColumn, threadId])
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    // Scroll the list, not the page -- scrollIntoView walks up to the document scroller.
+    const el = scrollRef.current
+    if (!el) return
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 120
+    if (nearBottom || messages.length === 0) el.scrollTop = el.scrollHeight
   }, [messages])
 
   useEffect(() => {
@@ -124,11 +128,14 @@ export function ChatThread({
     )
     if (unread.length === 0) return
 
-    const now = new Date().toISOString()
-    unread.forEach((msg) => {
-      void supabase.from('messages').update({ read_at: now }).eq('id', msg.id)
-    })
-  }, [messages, currentUserId])
+    // One statement, not one per message. Same rows the policy already permits.
+    void supabase
+      .from('messages')
+      .update({ read_at: new Date().toISOString() })
+      .eq(threadColumn, threadId)
+      .neq('sender_id', currentUserId)
+      .is('read_at', null)
+  }, [messages, currentUserId, threadColumn, threadId])
 
   async function handleSend(content: string, files?: File[]) {
     const attachments = files?.length ? await uploadAttachments(files, storagePrefix) : []
@@ -160,7 +167,11 @@ export function ChatThread({
 
   return (
     <div className={cn('flex h-full min-h-[420px] flex-col overflow-hidden bg-card', className)}>
-      <div className="flex-1 space-y-3 overflow-y-auto p-4">
+      <div
+        ref={scrollRef}
+        data-lenis-prevent
+        className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-4"
+      >
         {loading ? (
           <div className="space-y-3">
             <Skeleton className="h-12 w-2/3" />
@@ -212,7 +223,6 @@ export function ChatThread({
             )
           })
         )}
-        <div ref={bottomRef} />
       </div>
 
       {!readOnly && (

@@ -10,6 +10,15 @@ export interface MessageInputProps {
   disabled?: boolean
   placeholder?: string
   className?: string
+  /**
+   * Slim variant for the floating support widget.
+   *
+   * The default layout is roughly 160px of chrome -- an 80px textarea, an Attach button, a
+   * permanent attachment hint and a Send button -- which is most of a 380px panel. Compact
+   * mode auto-grows a single row, moves the hint into the paperclip's tooltip, and shrinks
+   * Send to an icon, landing at about 64px.
+   */
+  compact?: boolean
 }
 
 export function MessageInput({
@@ -17,6 +26,7 @@ export function MessageInput({
   disabled = false,
   placeholder = 'Type a message…',
   className,
+  compact = false,
 }: MessageInputProps) {
   const [content, setContent] = useState('')
   const [files, setFiles] = useState<File[]>([])
@@ -65,14 +75,28 @@ export function MessageInput({
   return (
     <form
       onSubmit={handleSubmit}
-      className={cn('flex flex-col gap-2 border-t border-border-cream bg-card p-4', className)}
+      className={cn(
+        'flex flex-col border-t border-border-cream bg-card',
+        compact ? 'gap-1.5 p-2.5' : 'gap-2 p-4',
+        className,
+      )}
     >
       <Textarea
         value={content}
         onChange={(e) => setContent(e.target.value)}
+        onInput={(e) => {
+          if (!compact) return
+          const el = e.currentTarget
+          el.style.height = 'auto'
+          el.style.height = `${Math.min(el.scrollHeight, 120)}px`
+        }}
         placeholder={placeholder}
         disabled={disabled || sending}
-        className="min-h-[80px] border-border-cream bg-card-hover text-text-dark"
+        rows={compact ? 1 : undefined}
+        className={cn(
+          'border-border-cream bg-card-hover text-text-dark',
+          compact ? 'min-h-[44px] max-h-[120px] resize-none py-2.5' : 'min-h-[80px]',
+        )}
         onKeyDown={(e) => {
           if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault()
@@ -121,22 +145,27 @@ export function MessageInput({
             size="sm"
             disabled={disabled || sending}
             className="text-text-dark-secondary"
+            title={compact ? ATTACHMENT_HINT : undefined}
+            aria-label={compact ? `Attach a file. ${ATTACHMENT_HINT}` : undefined}
             onClick={() => fileRef.current?.click()}
           >
             <Paperclip className="h-4 w-4" />
-            Attach
+            {!compact && 'Attach'}
           </Button>
-          <span className="font-mono text-[10px] uppercase tracking-widest text-text-dark-secondary">
-            {ATTACHMENT_HINT}
-          </span>
+          {!compact && (
+            <span className="font-mono text-[10px] uppercase tracking-widest text-text-dark-secondary">
+              {ATTACHMENT_HINT}
+            </span>
+          )}
         </div>
         <Button
           type="submit"
           size="sm"
+          aria-label={compact ? 'Send message' : undefined}
           disabled={disabled || sending || (!content.trim() && files.length === 0)}
         >
           <Send className="h-4 w-4" />
-          {sending ? 'Sending…' : 'Send'}
+          {!compact && (sending ? 'Sending…' : 'Send')}
         </Button>
       </div>
     </form>

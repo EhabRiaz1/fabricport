@@ -1,9 +1,13 @@
 import { useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
+import { ShoppingCart } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/contexts/AuthContext'
 import { ROLE_HOME_PATHS } from '@/types/app'
 import { BrandLogo } from '@/components/layout/BrandLogo'
+import { CountBadge } from '@/components/shared/CountBadge'
+import { useCartCount } from '@/stores/cart'
+import { useCartUI } from '@/lib/cart'
 
 const NAV_LINKS = [
   { label: 'Marketplace', href: '/marketplace' },
@@ -20,6 +24,10 @@ export function PublicNav({ className }: PublicNavProps) {
   const { isAuthenticated, role } = useAuth()
   const isHeroPage = location.pathname === '/'
   const portalHref = role ? ROLE_HOME_PATHS[role] : '/auth/login'
+  const cartCount = useCartCount()
+  const setCartOpen = useCartUI((s) => s.setOpen)
+  // Suppliers and admins have no cart_items rows and would fail the RLS check anyway.
+  const hideCart = isAuthenticated && role !== 'buyer'
 
   useEffect(() => {
     function handleScroll() {
@@ -82,6 +90,27 @@ export function PublicNav({ className }: PublicNavProps) {
           >
             {isAuthenticated ? 'My Portal' : 'Login'}
           </Link>
+          {/*
+            * A bare icon would look bolted on -- there is not one other icon in this nav.
+            * So it is a bordered square in the same visual language as the Browse CTA,
+            * which makes the trio read as: text link, icon box, CTA box.
+            */}
+          {!hideCart && (
+            <button
+              type="button"
+              onClick={() => setCartOpen(true)}
+              aria-label={cartCount > 0 ? `Cart, ${cartCount} items` : 'Cart'}
+              className={cn(
+                'clip-corner-sm relative grid h-8 w-8 place-items-center border transition-colors duration-200',
+                solid
+                  ? 'border-[#3C2A1A]/20 text-[#3C2A1A]/55 hover:border-[#3C2A1A]/50 hover:text-[#2C1A0E]'
+                  : 'border-white/25 text-white/70 hover:border-accent hover:text-accent',
+              )}
+            >
+              <ShoppingCart className="h-3.5 w-3.5" />
+              <CountBadge count={cartCount} className="absolute -right-1.5 -top-1.5" />
+            </button>
+          )}
           <Link
             to="/marketplace"
             className={cn(

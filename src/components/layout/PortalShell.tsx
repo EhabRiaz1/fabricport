@@ -25,6 +25,7 @@ import { cn } from '@/lib/utils'
 import type { PortalNavItem, PortalZone } from '@/types/app'
 import { isPortalZone } from '@/types/app'
 import { useAuth } from '@/contexts/AuthContext'
+import { useCartCount } from '@/stores/cart'
 import { NotificationBell } from '@/components/shared/NotificationBell'
 import { CommandPalette, isMac } from '@/components/shared/CommandPalette'
 import { BrandLogo } from '@/components/layout/BrandLogo'
@@ -135,6 +136,7 @@ export function PortalShell({ children, zone, title, className }: PortalShellPro
   const location = useLocation()
   const navigate = useNavigate()
   const { user, profile, role, signOut } = useAuth()
+  const cartCount = useCartCount()
   // Prefer the explicit zone prop (always passed by the router). Fall back to the
   // user's ROLE — never to a path heuristic that could hand a user another zone's
   // nav. UserRole and PortalZone share the same value set.
@@ -227,11 +229,19 @@ export function PortalShell({ children, zone, title, className }: PortalShellPro
                   />
                   <Icon className={cn('h-4 w-4 shrink-0', active && 'text-accent')} />
                   <span>{item.label}</span>
-                  {item.badge != null && item.badge > 0 && (
-                    <span className="ml-auto flex h-5 min-w-5 items-center justify-center bg-accent px-1.5 font-mono text-[10px] text-white">
-                      {item.badge}
-                    </span>
-                  )}
+                  {/*
+                    * PORTAL_NAV is a module constant, so it cannot carry a live number.
+                    * The badge slot has existed unused since the nav was written; the cart
+                    * count is the first thing to populate it.
+                    */}
+                  {(() => {
+                    const badge = item.href === '/buyer/cart' ? cartCount : item.badge
+                    return badge != null && badge > 0 ? (
+                      <span className="ml-auto flex h-5 min-w-5 items-center justify-center bg-accent px-1.5 font-mono text-[10px] text-white">
+                        {badge}
+                      </span>
+                    ) : null
+                  })()}
                 </Link>
               </Fragment>
             )

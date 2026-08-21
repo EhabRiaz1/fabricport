@@ -19,6 +19,8 @@ export type ChatThreadProps = {
   className?: string
   /** Slim the composer for the docked panel. */
   compact?: boolean
+  /** Opening line to seed the composer with, unsent. */
+  prefill?: string
   /** Counterpart to notify (WhatsApp/email/in-app) when a message is sent. */
   notifyUserId?: string
   /** Short sender label used in the notification copy. */
@@ -44,6 +46,7 @@ export function ChatThread({
   readOnly = false,
   className,
   compact = false,
+  prefill,
   notifyUserId,
   notifyFromLabel,
 }: ChatThreadProps) {
@@ -229,7 +232,14 @@ export function ChatThread({
       </div>
 
       {!readOnly && (
-        <MessageInput onSend={handleSend} disabled={loading} compact={compact} />
+        <MessageInput
+          onSend={handleSend}
+          disabled={loading}
+          compact={compact}
+          // Only seed an empty conversation. Reopening a thread that already has history
+          // should not push a canned opener into it.
+          prefill={messages.length === 0 ? prefill : undefined}
+        />
       )}
     </div>
   )

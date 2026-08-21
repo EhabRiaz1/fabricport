@@ -1,4 +1,4 @@
-import { useRef, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Paperclip, Send, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -19,6 +19,15 @@ export interface MessageInputProps {
    * Send to an icon, landing at about 64px.
    */
   compact?: boolean
+  /**
+   * Opening line to drop into the composer, unsent.
+   *
+   * Used when "Inquire now" starts a conversation: the buyer gets a sensible first sentence
+   * naming the fabric, which they can edit or delete before sending. Deliberately a draft
+   * rather than an auto-sent message -- nobody should find words in a supplier's inbox that
+   * they did not choose to send.
+   */
+  prefill?: string
 }
 
 export function MessageInput({
@@ -27,12 +36,53 @@ export function MessageInput({
   placeholder = 'Type a message…',
   className,
   compact = false,
+  prefill,
 }: MessageInputProps) {
   const [content, setContent] = useState('')
   const [files, setFiles] = useState<File[]>([])
   const [fileError, setFileError] = useState<string | null>(null)
   const [sending, setSending] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
+  const textRef = useRef<HTMLTextAreaElement>(null)
+  const appliedPrefill = useRef<string | null>(null)
+  const wantsFocus = useRef(false)
+
+  /**
+   * Apply a prefill once per distinct value, and only over an empty composer.
+   *
+   * Tracking what was last applied means clearing the suggestion does not immediately bring
+   * it back, and switching to another conversation does not re-seed this one.
+   */
+  useEffect(() => {
+    if (!prefill || prefill === appliedPrefill.current) return
+    appliedPrefill.current = prefill
+    wantsFocus.current = true
+    setContent((current) => (current.trim() ? current : prefill))
+  }, [prefill])
+
+  /**
+   * Focus once the field can actually take it.
+   *
+   * The composer is disabled while the thread loads its history, and focus() on a disabled
+   * element is a no-op -- so focusing at prefill time silently did nothing and the caret was
+   * left nowhere. Waiting for the enabled state is the difference between "type to continue"
+   * and "click here first".
+   */
+  const isDisabled = disabled || sending
+  useEffect(() => {
+    if (!wantsFocus.current || isDisabled) return
+    const el = textRef.current
+    if (!el) return
+    wantsFocus.current = false
+
+    el.focus()
+    // Caret at the end so typing continues the sentence rather than overwriting it.
+    el.setSelectionRange(el.value.length, el.value.length)
+    if (compact) {
+      el.style.height = 'auto'
+      el.style.height = `${Math.min(el.scrollHeight, 120)}px`
+    }
+  }, [isDisabled, content, compact])
 
   function addFiles(selected: FileList | null) {
     if (!selected) return
@@ -82,6 +132,7 @@ export function MessageInput({
       )}
     >
       <Textarea
+        ref={textRef}
         value={content}
         onChange={(e) => setContent(e.target.value)}
         onInput={(e) => {

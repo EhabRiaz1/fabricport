@@ -272,7 +272,11 @@ export default function FabricDetailPage() {
       toast.success('Inquiry sent', `${product.title} · ${orderQuantity} m`)
       // Open the conversation in the dock rather than navigating into the portal. The reader
       // asked a question about this fabric; taking them away from it to answer is backwards.
-      openThread(inquiryId, product.supplier.brand_name)
+      openThread(
+        inquiryId,
+        product.supplier.brand_name,
+        `Hi, I would like to know more about ${product.title}.`,
+      )
     } catch (err) {
       toast.error(
         'Could not send inquiry',

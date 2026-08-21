@@ -17,10 +17,12 @@ interface ChatDockState {
   inquiryId: string | null
   /** Shown in the header while the thread's own row is still loading. */
   title: string | null
+  /** Unsent opening line for a conversation that has just been started. */
+  draft: string | null
 
   openList: () => void
   openSupport: () => void
-  openThread: (inquiryId: string, title?: string) => void
+  openThread: (inquiryId: string, title?: string, draft?: string) => void
   back: () => void
   close: () => void
 }
@@ -37,10 +39,12 @@ export const useChatDock = create<ChatDockState>((set) => ({
   view: 'menu',
   inquiryId: null,
   title: null,
+  draft: null,
 
-  openList: () => set({ open: true, view: 'list', inquiryId: null, title: null }),
-  openSupport: () => set({ open: true, view: 'support', inquiryId: null, title: null }),
-  openThread: (inquiryId, title) => set({ open: true, view: 'thread', inquiryId, title: title ?? null }),
-  back: () => set({ view: 'list', inquiryId: null, title: null }),
+  openList: () => set({ open: true, view: 'list', inquiryId: null, title: null, draft: null }),
+  openSupport: () => set({ open: true, view: 'support', inquiryId: null, title: null, draft: null }),
+  openThread: (inquiryId, title, draft) =>
+    set({ open: true, view: 'thread', inquiryId, title: title ?? null, draft: draft ?? null }),
+  back: () => set({ view: 'list', inquiryId: null, title: null, draft: null }),
   close: () => set({ open: false }),
 }))

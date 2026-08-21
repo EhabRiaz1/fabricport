@@ -42,6 +42,7 @@ export function ChatDock() {
   const view = useChatDock((s) => s.view)
   const inquiryId = useChatDock((s) => s.inquiryId)
   const title = useChatDock((s) => s.title)
+  const draft = useChatDock((s) => s.draft)
   const openList = useChatDock((s) => s.openList)
   const openSupport = useChatDock((s) => s.openSupport)
   const back = useChatDock((s) => s.back)
@@ -269,6 +270,7 @@ export function ChatDock() {
             inquiryId={inquiryId}
             currentUserId={user.id}
             compact
+            prefill={draft ?? undefined}
             className="h-full min-h-0 flex-1 bg-transparent"
           />
         ) : (

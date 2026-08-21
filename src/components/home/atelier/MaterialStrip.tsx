@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowLeft, ArrowRight } from 'lucide-react'
 import { prefersReducedMotion } from '@/lib/gsap'
+import { useWheelPassThrough } from '@/hooks/useWheelPassThrough'
 import { getProductImageUrl } from '@/lib/utils'
 import type { ProductWithRelations } from '@/types/app'
 
@@ -41,6 +42,9 @@ export function MaterialStrip({ products }: MaterialStripProps) {
   const [atStart, setAtStart] = useState(true)
   const [atEnd, setAtEnd] = useState(false)
   const [interacted, setInteracted] = useState(false)
+
+  // Horizontal gestures pan the rack; vertical ones scroll the page straight past it.
+  useWheelPassThrough(rackRef, 'x', products.length)
 
   // --- edge state ------------------------------------------------------------------
   const syncEdges = useCallback(() => {
@@ -264,9 +268,6 @@ export function MaterialStrip({ products }: MaterialStripProps) {
           tabIndex={0}
           role="region"
           aria-label="Material library"
-          // data-lenis-prevent is required: Lenis intercepts wheel events document-wide, so
-          // without it a trackpad swipe never reaches this scroller.
-          data-lenis-prevent
           onKeyDown={onKeyDown}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}

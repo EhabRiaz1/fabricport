@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import { cn } from '@/lib/utils'
-import { useSupportUI } from '@/lib/support-ui'
+import { useChatDock } from '@/lib/chat-dock'
 
 /**
  * The "Company" column used to point at /about, /contact and /privacy. None of those are
@@ -26,7 +26,7 @@ export interface FooterProps {
 }
 
 export function Footer({ className }: FooterProps) {
-  const setSupportOpen = useSupportUI((s) => s.setOpen)
+  const openSupportChat = useChatDock((s) => s.openSupport)
 
   return (
     <footer className={cn('relative border-t border-[#3C2A1A]/10 bg-[#E2D9C8] overflow-hidden', className)}>
@@ -73,7 +73,7 @@ export function Footer({ className }: FooterProps) {
               <li>
                 <button
                   type="button"
-                  onClick={() => setSupportOpen(true)}
+                  onClick={openSupportChat}
                   className="text-left text-sm text-[#3C2A1A]/55 transition-colors hover:text-[#7A4A28]"
                 >
                   Chat with the team

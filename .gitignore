@@ -31,3 +31,6 @@ adminCred.rtf
 
 # Repair-run artefacts
 image-repair.jsonl
+
+# Generated supplier credentials — hand over, then delete
+CrescentBahumanCreds.txt

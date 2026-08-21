@@ -15,6 +15,7 @@ import { UnitToggle } from '@/components/marketplace/UnitToggle'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useProducts, MARKETPLACE_PAGE_SIZE } from '@/hooks/useProducts'
 import { useMarketplaceFilters } from '@/hooks/useMarketplaceFilters'
+import { useWheelPassThrough } from '@/hooks/useWheelPassThrough'
 import { useSuppliers } from '@/hooks/useSuppliers'
 import { getFxRate } from '@/lib/fx'
 import { COLOR_FAMILIES, type ColorFamily } from '@/lib/color/classify'
@@ -71,6 +72,7 @@ export default function MarketplacePage() {
     pending: filtersPending,
   } = useMarketplaceFilters()
   const [filterSheetOpen, setFilterSheetOpen] = useState(false)
+  const sidebarRef = useRef<HTMLDivElement>(null)
   const [categories, setCategories] = useState<FabricFilterOption[]>([])
   const [facetCounts, setFacetCounts] = useState<{
     bySupplier: Record<string, number>
@@ -93,6 +95,10 @@ export default function MarketplacePage() {
   const { suppliers } = useSuppliers({ verifiedOnly: true, skipProductCounts: true })
 
   usePagePresence({ path: '/marketplace' })
+
+  // Scrolls its own facets while it has room, then hands the gesture back to the page.
+  // Keyed on the facet count so the listener binds once the rail actually renders.
+  useWheelPassThrough(sidebarRef, 'y', categories.length)
 
   useEffect(() => {
     getFxRate().then(setFxRate).catch(() => undefined)
@@ -264,8 +270,8 @@ export default function MarketplacePage() {
         <div className="mt-10 lg:grid lg:grid-cols-[268px_minmax(0,1fr)] lg:gap-10 xl:grid-cols-[292px_minmax(0,1fr)] xl:gap-12">
           <aside className="hidden lg:block">
             <div
-              data-lenis-prevent
-              className="scrollbar-none sticky top-[60px] max-h-[calc(100dvh-60px)] overflow-y-auto overscroll-contain px-2 pb-10 pt-5"
+              ref={sidebarRef}
+              className="scrollbar-none sticky top-[60px] max-h-[calc(100dvh-60px)] overflow-y-auto px-2 pb-10 pt-5"
             >
               <FilterPanel
                 filters={filters}

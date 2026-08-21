@@ -30,6 +30,7 @@ import {
 import { usePreferencesStore } from '@/stores/preferences'
 import { useCartStore } from '@/stores/cart'
 import { useCartUI } from '@/lib/cart'
+import { useChatDock } from '@/lib/chat-dock'
 import { toast } from '@/stores/toast'
 import type { ProductSpecRow } from '@/types/app'
 
@@ -55,6 +56,7 @@ export default function FabricDetailPage() {
   const [viewerOpen, setViewerOpen] = useState(false)
   const addToCart = useCartStore((s) => s.add)
   const setCartOpen = useCartUI((s) => s.setOpen)
+  const openThread = useChatDock((s) => s.openThread)
   const [quantity, setQuantity] = useState(1)
   const [fxRate, setFxRate] = useState(278)
   const [adding, setAdding] = useState(false)
@@ -145,20 +147,33 @@ export default function FabricDetailPage() {
         ? `${metersToYards(product.stock_meters).toFixed(0)} yards`
         : `${product.stock_meters.toFixed(0)} meters`
 
-    const gsm =
-      getAttributeValue(product, 'weight-before-wash') ??
-      getAttributeValue(product, 'gsm') ??
-      getAttributeValue(product, 'weight')
-    const width =
-      getAttributeValue(product, 'width-inches') ?? getAttributeValue(product, 'width')
+    /*
+     * Prefer the promoted columns over the attribute table.
+     *
+     * gsm / width_inches / composition are now populated for every product and are plain
+     * numbers, so the page can format them itself. The attribute values are free text that
+     * may already carry a unit ("301 GSM"), which is how "301 GSM GSM g/m²" happened -- so
+     * when falling back to them, print them as-is rather than appending a second unit.
+     */
+    const gsmText =
+      product.gsm != null
+        ? `${product.gsm} g/m²`
+        : (getAttributeValue(product, 'weight-before-wash') ??
+           getAttributeValue(product, 'gsm') ??
+           getAttributeValue(product, 'weight'))
+    const widthText =
+      product.width_inches != null
+        ? `${product.width_inches}"`
+        : (getAttributeValue(product, 'width-inches') ?? getAttributeValue(product, 'width'))
     const composition =
+      product.composition ??
       getAttributeValue(product, 'fabric-content') ??
       getAttributeValue(product, 'composition') ??
       getAttributeValue(product, 'content')
 
     const rows: ProductSpecRow[] = [
-      { label: 'GSM', value: gsm ? `${gsm} g/m²` : '—' },
-      { label: 'WIDTH', value: width ? `${width}"` : '—' },
+      { label: 'GSM', value: gsmText ?? '—' },
+      { label: 'WIDTH', value: widthText ?? '—' },
       { label: 'COMPOSITION', value: composition ?? '—' },
       { label: 'CATEGORY', value: product.category?.name ?? '—' },
       { label: 'STOCK', value: stock },
@@ -255,7 +270,9 @@ export default function FabricDetailPage() {
       }).catch(() => undefined)
 
       toast.success('Inquiry sent', `${product.title} · ${orderQuantity} m`)
-      navigate(`/buyer/inquiries/${inquiryId}`)
+      // Open the conversation in the dock rather than navigating into the portal. The reader
+      // asked a question about this fabric; taking them away from it to answer is backwards.
+      openThread(inquiryId, product.supplier.brand_name)
     } catch (err) {
       toast.error(
         'Could not send inquiry',

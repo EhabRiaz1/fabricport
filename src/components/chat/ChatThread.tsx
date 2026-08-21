@@ -17,6 +17,8 @@ export type ChatThreadProps = {
   currentUserId: string
   readOnly?: boolean
   className?: string
+  /** Slim the composer for the docked panel. */
+  compact?: boolean
   /** Counterpart to notify (WhatsApp/email/in-app) when a message is sent. */
   notifyUserId?: string
   /** Short sender label used in the notification copy. */
@@ -41,6 +43,7 @@ export function ChatThread({
   currentUserId,
   readOnly = false,
   className,
+  compact = false,
   notifyUserId,
   notifyFromLabel,
 }: ChatThreadProps) {
@@ -226,7 +229,7 @@ export function ChatThread({
       </div>
 
       {!readOnly && (
-        <MessageInput onSend={handleSend} disabled={loading} />
+        <MessageInput onSend={handleSend} disabled={loading} compact={compact} />
       )}
     </div>
   )

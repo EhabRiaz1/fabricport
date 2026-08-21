@@ -9,7 +9,8 @@ import { PortalShell } from '@/components/layout/PortalShell'
 import { WishlistSync } from '@/components/marketplace/WishlistSync'
 import { CartSync } from '@/components/cart/CartSync'
 import { CartDrawer } from '@/components/cart/CartDrawer'
-import { SupportWidget } from '@/components/support/SupportWidget'
+import { ChatDock } from '@/components/chat/ChatDock'
+import { ScrollToTop } from '@/components/layout/ScrollToTop'
 const HomePage = lazy(() => import('@/pages/public/HomePage'))
 const MarketplacePage = lazy(() => import('@/pages/public/MarketplacePage'))
 const FabricDetailPage = lazy(() => import('@/pages/public/FabricDetailPage'))
@@ -114,6 +115,7 @@ export default function App() {
         <WishlistSync />
         <CartSync />
         <BrowserRouter>
+        <ScrollToTop />
         <SmoothScroll>
           <Suspense fallback={<RouteFallback />}>
           <Routes>
@@ -234,7 +236,7 @@ export default function App() {
         </SmoothScroll>
         {/* Inside BrowserRouter: the drawer navigates after submitting. */}
         <CartDrawer />
-        <SupportWidget />
+        <ChatDock />
         <Toaster />
         </BrowserRouter>
       </AuthProvider>

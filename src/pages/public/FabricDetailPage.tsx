@@ -6,6 +6,8 @@ import { Footer } from '@/components/layout/Footer'
 import { FabricCard } from '@/components/marketplace/FabricCard'
 import { ColorSwitcher } from '@/components/marketplace/ColorSwitcher'
 import { WishlistButton } from '@/components/marketplace/WishlistButton'
+import { ZoomImage } from '@/components/shared/ZoomImage'
+import { ImageViewer } from '@/components/shared/ImageViewer'
 import { SpecTable } from '@/components/shared/SpecTable'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -49,6 +51,7 @@ export default function FabricDetailPage() {
   const { currency, unit } = usePreferencesStore()
   const [activeImage, setActiveImage] = useState(0)
   const [showVideo, setShowVideo] = useState(false)
+  const [viewerOpen, setViewerOpen] = useState(false)
   const [quantity, setQuantity] = useState(1)
   const [fxRate, setFxRate] = useState(278)
   const [adding, setAdding] = useState(false)
@@ -113,6 +116,7 @@ export default function FabricDetailPage() {
       (product?.images ?? []).map((path) => ({
         card: getProductImageUrl(path, { variant: 'card' }),
         medium: getProductImageUrl(path, { variant: 'medium' }),
+        large: getProductImageUrl(path, { variant: 'large' }),
         original: getProductImageUrl(path, { variant: 'original' }),
       })),
     [product?.images],
@@ -333,14 +337,17 @@ export default function FabricDetailPage() {
                   className="aspect-square w-full bg-black object-cover"
                 />
               ) : images[activeImage] ? (
-                <img
-                  src={images[activeImage].medium}
-                  srcSet={`${images[activeImage].card} 480w, ${images[activeImage].medium} 960w, ${images[activeImage].original} 1920w`}
-                  sizes="(min-width: 1024px) 50vw, 100vw"
+                /*
+                 * The srcSet here used to advertise `original` as 1920w. For 785 of the 1190
+                 * stored objects that was simply false -- they were 240x300 -- so on a 2x
+                 * display the browser confidently picked the worst file for the largest slot.
+                 * Only the generated variants are listed now, because their widths are known
+                 * by construction; `original` survives solely as an onError fallback.
+                 */
+                <ZoomImage
+                  variants={images[activeImage]}
                   alt={product.title}
-                  className="aspect-square w-full object-cover"
-                  loading="eager"
-                  decoding="async"
+                  onOpenViewer={() => setViewerOpen(true)}
                 />
               ) : (
                 <div className="flex aspect-square items-center justify-center bg-elevated">
@@ -352,6 +359,14 @@ export default function FabricDetailPage() {
               <WishlistButton
                 productId={product.id}
                 className="absolute bottom-3 right-3 z-10"
+              />
+              <ImageViewer
+                images={images}
+                index={activeImage}
+                open={viewerOpen}
+                onOpenChange={setViewerOpen}
+                onIndexChange={setActiveImage}
+                alt={product.title}
               />
             </div>
 

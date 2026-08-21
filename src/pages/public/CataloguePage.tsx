@@ -130,9 +130,15 @@ export default function CataloguePage() {
                   {product.images[0] ? (
                     <img
                       src={getProductImageUrl(product.images[0], { variant: 'card' })}
+                      // A single 480w file was being served into cells that are blurry at
+                      // 2x. No magnifier here on purpose: a hover lens across a grid fights
+                      // the card's own click-through.
+                      srcSet={`${getProductImageUrl(product.images[0], { variant: 'card' })} 480w, ${getProductImageUrl(product.images[0], { variant: 'medium' })} 960w`}
+                      sizes="(min-width: 1024px) 30vw, (min-width: 640px) 45vw, 92vw"
                       alt={product.title}
                       className="h-full w-full object-cover"
                       loading="lazy"
+                      decoding="async"
                     />
                   ) : (
                     <div className="flex h-full w-full items-center justify-center font-mono text-[9px] uppercase tracking-widest text-text-dark-secondary/50">

@@ -3,21 +3,8 @@ import { Link } from 'react-router-dom'
 import { gsap, prefersReducedMotion } from '@/lib/gsap'
 import { cn } from '@/lib/utils'
 import { COLOR_FAMILIES, type ColorFamily } from '@/lib/color/classify'
+import { COLOR_SWATCH_HEX, COLOR_SWATCH_TINT } from '@/lib/color/swatches'
 
-const SWATCHES: Record<ColorFamily, { hex: string; tint: string }> = {
-  black: { hex: '#1F1B17', tint: '#E7E2DA' },
-  white: { hex: '#F4F1EA', tint: '#F8F5EE' },
-  gray: { hex: '#8C8579', tint: '#EFEBE3' },
-  beige: { hex: '#D4C4A8', tint: '#F4ECDC' },
-  brown: { hex: '#6B4423', tint: '#EFE2D2' },
-  red: { hex: '#B13A2C', tint: '#F4DFD8' },
-  orange: { hex: '#E8593C', tint: '#F8E4DA' },
-  yellow: { hex: '#D9A511', tint: '#F7EDD2' },
-  green: { hex: '#2E7D4F', tint: '#DFEBDD' },
-  blue: { hex: '#2C5F8A', tint: '#DDE7EE' },
-  purple: { hex: '#6E4685', tint: '#E9E0EE' },
-  pink: { hex: '#D4548C', tint: '#F6DFE9' },
-}
 
 /** Interactive ribbon of the twelve colour families. Hover tints the room. */
 export function ColorRibbon() {
@@ -55,7 +42,7 @@ export function ColorRibbon() {
     setActive(family)
     sectionRef.current?.style.setProperty(
       '--ribbon-tint',
-      family ? SWATCHES[family].tint : '#F6F1E9',
+      family ? COLOR_SWATCH_TINT[family] : '#F6F1E9',
     )
   }
 
@@ -108,7 +95,7 @@ export function ColorRibbon() {
                     ? 'scale-[1.06] shadow-lg shadow-ink/15'
                     : 'group-hover:scale-[1.04]',
                 )}
-                style={{ backgroundColor: SWATCHES[family].hex }}
+                style={{ backgroundColor: COLOR_SWATCH_HEX[family] }}
               />
               <span className="mt-2 block text-center font-mono text-[9px] uppercase tracking-[0.18em] text-text-muted transition-colors group-hover:text-text-primary">
                 {family}

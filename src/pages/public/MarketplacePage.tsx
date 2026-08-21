@@ -1,18 +1,20 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowRight, ArrowUpDown } from 'lucide-react'
+import { ArrowRight, ArrowUpDown, Search, SlidersHorizontal } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { PublicNav } from '@/components/layout/PublicNav'
 import { Footer } from '@/components/layout/Footer'
-import { FilterDock, ActiveFilterChips } from '@/components/marketplace/FilterDock'
+import { ActiveFilterChips } from '@/components/marketplace/ActiveFilterChips'
+import { FilterPanel } from '@/components/marketplace/FilterPanel'
+import { Sheet, SheetContent, SheetBody, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import { Input } from '@/components/ui/input'
 import { ArchiveHero } from '@/components/marketplace/ArchiveHero'
 import { ColorSpectrum } from '@/components/marketplace/ColorSpectrum'
 import { FabricCard } from '@/components/marketplace/FabricCard'
 import { UnitToggle } from '@/components/marketplace/UnitToggle'
 import { Skeleton } from '@/components/ui/skeleton'
-import { useDebouncedValue } from '@/hooks/useDebouncedValue'
 import { useProducts, MARKETPLACE_PAGE_SIZE } from '@/hooks/useProducts'
+import { useMarketplaceFilters } from '@/hooks/useMarketplaceFilters'
 import { useSuppliers } from '@/hooks/useSuppliers'
 import { getFxRate } from '@/lib/fx'
 import { COLOR_FAMILIES, type ColorFamily } from '@/lib/color/classify'
@@ -56,57 +58,19 @@ const CURATED_EDITS: CuratedEdit[] = [
   },
 ]
 
-function filtersFromParams(params: URLSearchParams): MarketplaceFilters {
-  const filters: MarketplaceFilters = {}
-  const category = params.get('category')
-  if (category) filters.categorySlug = category
-  const supplier = params.get('supplier')
-  if (supplier) filters.supplierSlug = supplier
-  const colors = params.get('colors')
-  if (colors) {
-    const families = colors
-      .split(',')
-      .filter((c): c is ColorFamily => (COLOR_FAMILIES as readonly string[]).includes(c))
-    if (families.length) filters.colorFamilies = families
-  }
-  const search = params.get('q')
-  if (search) filters.search = search
-  const sort = params.get('sort')
-  if (sort === 'price_asc' || sort === 'price_desc') filters.sort = sort
-  for (const [key, param] of [
-    ['priceMin', 'price_min'],
-    ['priceMax', 'price_max'],
-    ['gsmMin', 'gsm_min'],
-    ['gsmMax', 'gsm_max'],
-  ] as const) {
-    const raw = params.get(param)
-    if (raw != null && raw !== '' && !Number.isNaN(Number(raw))) {
-      filters[key] = Number(raw)
-    }
-  }
-  return filters
-}
-
-function paramsFromFilters(filters: MarketplaceFilters): URLSearchParams {
-  const params = new URLSearchParams()
-  if (filters.categorySlug) params.set('category', filters.categorySlug)
-  if (filters.supplierSlug) params.set('supplier', filters.supplierSlug)
-  if (filters.colorFamilies?.length) params.set('colors', filters.colorFamilies.join(','))
-  if (filters.search) params.set('q', filters.search)
-  if (filters.sort && filters.sort !== 'newest') params.set('sort', filters.sort)
-  if (filters.priceMin != null) params.set('price_min', String(filters.priceMin))
-  if (filters.priceMax != null) params.set('price_max', String(filters.priceMax))
-  if (filters.gsmMin != null) params.set('gsm_min', String(filters.gsmMin))
-  if (filters.gsmMax != null) params.set('gsm_max', String(filters.gsmMax))
-  return params
-}
-
 export default function MarketplacePage() {
-  const [searchParams, setSearchParams] = useSearchParams()
-  const [filters, setFilters] = useState<MarketplaceFilters>(() =>
-    filtersFromParams(searchParams),
-  )
-  const debouncedFilters = useDebouncedValue(filters, 350)
+  const {
+    filters,
+    debouncedFilters,
+    setFilters,
+    patch,
+    replaceFacets,
+    toggleColor,
+    clearAll,
+    activeCount,
+    pending: filtersPending,
+  } = useMarketplaceFilters()
+  const [filterSheetOpen, setFilterSheetOpen] = useState(false)
   const [categories, setCategories] = useState<FabricFilterOption[]>([])
   const [facetCounts, setFacetCounts] = useState<{
     bySupplier: Record<string, number>
@@ -129,11 +93,6 @@ export default function MarketplacePage() {
   const { suppliers } = useSuppliers({ verifiedOnly: true, skipProductCounts: true })
 
   usePagePresence({ path: '/marketplace' })
-
-  // Keep the URL shareable — reflect debounced filters into search params.
-  useEffect(() => {
-    setSearchParams(paramsFromFilters(debouncedFilters), { replace: true })
-  }, [debouncedFilters, setSearchParams])
 
   useEffect(() => {
     getFxRate().then(setFxRate).catch(() => undefined)
@@ -187,10 +146,6 @@ export default function MarketplacePage() {
     [suppliers, facetCounts.bySupplier],
   )
 
-  const filtersPending = useMemo(
-    () => JSON.stringify(filters) !== JSON.stringify(debouncedFilters),
-    [filters, debouncedFilters],
-  )
   const refreshingResults = loading && products.length > 0
   const showResultsLoading = filtersPending || refreshingResults
 
@@ -270,13 +225,7 @@ export default function MarketplacePage() {
             counts={facetCounts.byColor}
             selected={filters.colorFamilies ?? []}
             onToggle={(family) => {
-              setFilters((prev) => {
-                const current = prev.colorFamilies ?? []
-                const next = current.includes(family)
-                  ? current.filter((f) => f !== family)
-                  : [...current, family]
-                return { ...prev, colorFamilies: next.length > 0 ? next : undefined }
-              })
+              toggleColor(family)
               scrollToGrid()
             }}
           />
@@ -287,7 +236,7 @@ export default function MarketplacePage() {
                 key={edit.key}
                 type="button"
                 onClick={() => {
-                  setFilters((prev) => ({ sort: prev.sort, ...edit.filters }))
+                  replaceFacets(edit.filters)
                   scrollToGrid()
                 }}
                 className="group grain relative overflow-hidden border border-[#2C1A0E]/15 bg-[#2C1A0E] px-6 py-7 text-left transition-colors duration-300 hover:bg-[#3C2A1A] clip-corner-sm"
@@ -307,11 +256,69 @@ export default function MarketplacePage() {
           </div>
         </motion.div>
 
-        {/* Toolbar + grid share a section so sticky spans the results scroll */}
-        <section ref={gridSectionRef} className="mt-10 scroll-mt-[68px]">
+        {/*
+          * Facet rail + results. The rail is a sibling of the results column rather than a
+          * wrapper, so both stick at the same top-[60px] offset under the nav and neither
+          * has to know the other's height.
+          */}
+        <div className="mt-10 lg:grid lg:grid-cols-[268px_minmax(0,1fr)] lg:gap-10 xl:grid-cols-[292px_minmax(0,1fr)] xl:gap-12">
+          <aside className="hidden lg:block">
+            <div
+              data-lenis-prevent
+              className="scrollbar-none sticky top-[60px] max-h-[calc(100dvh-60px)] overflow-y-auto overscroll-contain px-2 pb-10 pt-5"
+            >
+              <FilterPanel
+                filters={filters}
+                onPatch={patch}
+                onToggleColor={toggleColor}
+                onClearAll={clearAll}
+                activeCount={activeCount}
+                categories={categories}
+                suppliers={supplierOptions}
+                colorCounts={facetCounts.byColor}
+              />
+            </div>
+          </aside>
+
+        <section ref={gridSectionRef} className="min-w-0 scroll-mt-[68px]">
           <div className="sticky top-[60px] z-40 border-b border-[#3C2A1A]/8 bg-[#F6F1E9]/96 px-2 backdrop-blur-xl sm:px-3">
             <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 py-3">
-              <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2">
+              <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-4 gap-y-2">
+                {/* Filters live in the left rail from lg up; below that they are one tap away. */}
+                <button
+                  type="button"
+                  onClick={() => setFilterSheetOpen(true)}
+                  className="flex shrink-0 items-center gap-2 border border-[#C8C4BC] px-3 py-2 font-mono text-[10px] uppercase tracking-[0.14em] text-[#3C2A1A] transition-colors hover:border-[#2C1A0E] lg:hidden"
+                >
+                  <SlidersHorizontal className="h-3.5 w-3.5" />
+                  Filters
+                  {activeCount > 0 && (
+                    <span className="grid h-4 min-w-4 place-items-center bg-[#E8593C] px-1 text-[9px] tabular-nums text-white">
+                      {activeCount}
+                    </span>
+                  )}
+                </button>
+
+                {/*
+                  * Search is a query, not a facet, so it lives in the toolbar at every
+                  * breakpoint rather than being duplicated into the rail. It used to be the
+                  * last element inside the filter drawer, which is exactly where nobody
+                  * found it.
+                  */}
+                <label className="relative w-full min-w-0 sm:w-[260px]">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#9C8870]" />
+                  <Input
+                    type="search"
+                    value={filters.search ?? ''}
+                    onChange={(event) =>
+                      patch({ search: event.target.value || undefined })
+                    }
+                    placeholder="Fabric name…"
+                    aria-label="Search fabrics"
+                    className="h-9 border-[#C8C4BC] bg-transparent pl-9 text-[13px] text-[#2C1A0E]"
+                  />
+                </label>
+
                 <p className="shrink-0 font-display text-base font-semibold tracking-tight text-[#2C1A0E]">
                   {loading && products.length === 0 ? 'Catalogue' : `${total || products.length} fabrics`}
                 </p>
@@ -334,10 +341,7 @@ export default function MarketplacePage() {
                       key={option.value}
                       type="button"
                       onClick={() =>
-                        setFilters((prev) => ({
-                          ...prev,
-                          sort: option.value === 'newest' ? undefined : option.value,
-                        }))
+                        patch({ sort: option.value === 'newest' ? undefined : option.value })
                       }
                       className={cn(
                         'px-3 py-2.5 font-mono text-[10px] uppercase tracking-[0.12em] transition-colors',
@@ -354,54 +358,6 @@ export default function MarketplacePage() {
               </div>
             </div>
 
-            {categories.length > 0 && (
-              <div className="scrollbar-none -mx-2 flex gap-2 overflow-x-auto px-2 pb-3 sm:-mx-3 sm:px-3">
-                <button
-                  type="button"
-                  onClick={() => setFilters((prev) => ({ ...prev, categorySlug: undefined }))}
-                  className={cn(
-                    'shrink-0 border px-4 py-2 font-mono text-[10px] uppercase tracking-[0.14em] transition-colors',
-                    !filters.categorySlug
-                      ? 'border-[#2C1A0E] bg-[#2C1A0E] text-[#E8E4DC]'
-                      : 'border-[#C8C4BC] text-[#3C2A1A]/60 hover:border-[#2C1A0E]/50 hover:text-[#2C1A0E]',
-                  )}
-                >
-                  All
-                </button>
-                {categories.map((cat) => (
-                  <button
-                    key={cat.slug}
-                    type="button"
-                    onClick={() =>
-                      setFilters((prev) => ({
-                        ...prev,
-                        categorySlug: prev.categorySlug === cat.slug ? undefined : cat.slug,
-                      }))
-                    }
-                    className={cn(
-                      'shrink-0 border px-4 py-2 font-mono text-[10px] uppercase tracking-[0.14em] transition-colors',
-                      filters.categorySlug === cat.slug
-                        ? 'border-[#2C1A0E] bg-[#2C1A0E] text-[#E8E4DC]'
-                        : 'border-[#C8C4BC] text-[#3C2A1A]/60 hover:border-[#2C1A0E]/50 hover:text-[#2C1A0E]',
-                    )}
-                  >
-                    {cat.label}
-                    {(cat.count ?? 0) > 0 && (
-                      <span
-                        className={cn(
-                          'ml-2',
-                          filters.categorySlug === cat.slug
-                            ? 'text-[#E8E4DC]/60'
-                            : 'text-[#3C2A1A]/35',
-                        )}
-                      >
-                        {cat.count}
-                      </span>
-                    )}
-                  </button>
-                ))}
-              </div>
-            )}
           </div>
 
           <motion.div
@@ -524,16 +480,38 @@ export default function MarketplacePage() {
             )}
           </motion.div>
         </section>
+        </div>
       </main>
 
-      <FilterDock
-        filters={filters}
-        onChange={setFilters}
-        categories={categories}
-        suppliers={supplierOptions}
-        resultCount={total || products.length}
-        resultsLoading={showResultsLoading}
-      />
+      {/* Below lg the same panel renders inside a left sheet. One component, two shells. */}
+      <Sheet open={filterSheetOpen} onOpenChange={setFilterSheetOpen}>
+        <SheetContent side="left" className="w-[86vw] max-w-sm bg-[#F6F1E9]">
+          <SheetHeader className="border-[#C8C4BC]">
+            <SheetTitle className="text-[#2C1A0E]">Filters</SheetTitle>
+          </SheetHeader>
+          <SheetBody>
+            <FilterPanel
+              filters={filters}
+              onPatch={patch}
+              onToggleColor={toggleColor}
+              onClearAll={clearAll}
+              activeCount={activeCount}
+              categories={categories}
+              suppliers={supplierOptions}
+              colorCounts={facetCounts.byColor}
+            />
+          </SheetBody>
+          <div className="border-t border-[#C8C4BC] px-5 py-4">
+            <button
+              type="button"
+              onClick={() => setFilterSheetOpen(false)}
+              className="w-full bg-[#2C1A0E] py-3 font-mono text-[10px] uppercase tracking-[0.18em] text-[#E8E4DC] transition-colors hover:bg-[#3C2A1A]"
+            >
+              Show {total || products.length} fabrics
+            </button>
+          </div>
+        </SheetContent>
+      </Sheet>
 
       <motion.div
         initial="hidden"

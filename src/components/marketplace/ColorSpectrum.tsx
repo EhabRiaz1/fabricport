@@ -1,22 +1,9 @@
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
 import { COLOR_FAMILIES } from '@/lib/color/classify'
+import { COLOR_SWATCH_HEX } from '@/lib/color/swatches'
 import type { ColorFamily } from '@/lib/color/classify'
 
-const SPECTRUM_SWATCHES: Record<ColorFamily, string> = {
-  black: '#1F1B17',
-  white: '#F2EEE6',
-  gray: '#8C8881',
-  beige: '#D4C4A8',
-  brown: '#6B4423',
-  red: '#B5382A',
-  orange: '#DA5B33',
-  yellow: '#E0B43A',
-  green: '#3E7A4E',
-  blue: '#33628F',
-  purple: '#71518F',
-  pink: '#C75D8C',
-}
 
 export interface ColorSpectrumProps {
   /** Published-fabric count per colour family; families at 0 are hidden. */
@@ -79,7 +66,7 @@ export function ColorSpectrum({ counts, selected, onToggle, className }: ColorSp
                 dimmed ? 'opacity-35' : 'opacity-100',
               )}
               style={{
-                backgroundColor: SPECTRUM_SWATCHES[family],
+                backgroundColor: COLOR_SWATCH_HEX[family],
                 flexGrow: hovered === family ? count * 1.6 + 4 : count,
                 flexBasis: 0,
               }}

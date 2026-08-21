@@ -90,13 +90,16 @@ interface Candidate {
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
 /**
- * Largest frame the legacy /originals/ endpoint is known to serve (1320x1080; the other
- * common size is 1080x1080). If what we already have meets or beats this, fetching the
- * legacy file cannot improve anything -- so don't spend a multi-megabyte download to find
- * that out. This is what makes a full run take minutes instead of hours: roughly 180 of the
- * 465 products already have real photographs at 2000x2000 or 3000x3000.
+ * The legacy /originals/ endpoint serves one size per filename, and everything it has is at
+ * least 1000px on its short edge (observed: 1080x1080 and 1320x1080). So if what we already
+ * hold is comfortably above thumbnail territory, we already have the legacy original or
+ * better and re-downloading it cannot improve anything.
+ *
+ * This is what makes a full run take minutes instead of hours, and -- unlike a pixel-area
+ * ceiling -- it also makes a SECOND run cheap, because the images this script just repaired
+ * no longer qualify for another probe.
  */
-const LEGACY_CEILING_PX = 1320 * 1080
+const LEGACY_SHORT_EDGE_FLOOR = 1000
 
 async function measure(
   source: Candidate['source'],
@@ -126,21 +129,30 @@ const execFileAsync = promisify(execFile)
  * anything that is not a decodable image is rejected by measure() downstream anyway.
  */
 async function fetchLegacy(filename: string): Promise<Buffer | null> {
-  try {
-    const { stdout } = await execFileAsync(
-      'curl',
-      [
-        '-sfL',
-        '--max-time', '60',
-        '-A', 'FabricPortImageRepair/1.0 (+owner migration)',
-        `${LEGACY_ORIGINALS}/${encodeURIComponent(filename)}`,
-      ],
-      { encoding: 'buffer', maxBuffer: 64 * 1024 * 1024 },
-    )
-    return stdout.length > 0 ? stdout : null
-  } catch {
-    return null
+  // Retry, because a transient failure here is indistinguishable from "this file does not
+  // exist upstream" and silently degrades to leaving a 240x300 thumbnail in place. One run
+  // lost a genuinely available 1320x1080 original exactly this way.
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const { stdout } = await execFileAsync(
+        'curl',
+        [
+          '-sfL',
+          '--max-time', '90',
+          '--retry', '2',
+          '--retry-delay', '1',
+          '-A', 'FabricPortImageRepair/1.0 (+owner migration)',
+          `${LEGACY_ORIGINALS}/${encodeURIComponent(filename)}`,
+        ],
+        { encoding: 'buffer', maxBuffer: 64 * 1024 * 1024 },
+      )
+      if (stdout.length > 0) return stdout
+    } catch {
+      // 404 also lands here; the backoff below costs a few seconds on a genuine miss.
+    }
+    await sleep(500 * (attempt + 1))
   }
+  return null
 }
 
 async function main() {
@@ -191,13 +203,13 @@ async function main() {
 
       // Only reach out to the legacy host when it could actually help.
       let legacy: Candidate | null = null
-      const bestLocalPx = Math.max(
-        current.width * current.height,
-        local ? local.width * local.height : 0,
+      const bestShortEdge = Math.max(
+        Math.min(current.width, current.height),
+        local ? Math.min(local.width, local.height) : 0,
       )
       // --audit always probes: knowing the true ceiling for every image is the point of an
       // audit, even where the legacy copy cannot win.
-      if (AUDIT || bestLocalPx < LEGACY_CEILING_PX) {
+      if (AUDIT || bestShortEdge < LEGACY_SHORT_EDGE_FLOOR) {
         legacy = await measure('legacy', await fetchLegacy(t.filename))
         await sleep(120) // be polite to the legacy host
       }

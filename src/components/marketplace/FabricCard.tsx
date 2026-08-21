@@ -97,14 +97,24 @@ function ProductCardImage({
   variant = 'card',
   eager,
   className,
+  sizes,
 }: {
   path: string
   alt: string
   variant?: ProductImageVariant
   eager?: boolean
   className?: string
+  sizes?: string
 }) {
   const primarySrc = getProductImageUrl(path, { variant })
+  // Cards used to request a single 480w file, which is visibly soft in a ~300 CSS px cell on
+  // a 2x display. Only the generated variants are listed -- their widths are known by
+  // construction, unlike `original`, whose dimensions vary per image. The srcSet is dropped
+  // once the onError fallback kicks in, so the fallback request is unambiguous.
+  const srcSet =
+    variant === 'original'
+      ? undefined
+      : `${getProductImageUrl(path, { variant: 'card' })} 480w, ${getProductImageUrl(path, { variant: 'medium' })} 960w`
   const fallbackSrc =
     variant === 'original' ? null : getProductImageUrl(path, { variant: 'original' })
   const [src, setSrc] = useState(primarySrc)
@@ -131,6 +141,8 @@ function ProductCardImage({
       <img
         ref={imgRef}
         src={src}
+        srcSet={src === primarySrc ? srcSet : undefined}
+        sizes={src === primarySrc ? sizes : undefined}
         alt={alt}
         className={cn(className, !loaded && 'opacity-0')}
         loading={eager ? 'eager' : 'lazy'}
@@ -245,6 +257,11 @@ function FabricCardComponent({
               path={imagePath}
               alt={product.title}
               variant={isGrid ? 'card' : isFeatured ? 'medium' : 'medium'}
+              sizes={
+                isGrid
+                  ? '(min-width: 1536px) 22vw, (min-width: 1280px) 30vw, (min-width: 640px) 45vw, 92vw'
+                  : '(min-width: 1024px) 33vw, 92vw'
+              }
               eager={isGrid && imagePriority}
               className="h-full w-full object-cover transition-all duration-500 group-hover:scale-[1.03]"
             />

@@ -12,7 +12,13 @@ import {
 } from '@/components/ui/sheet'
 import { useLenisLock } from '@/lib/lenis'
 import { useCartStore } from '@/stores/cart'
-import { useCartUI, groupBySupplier, groupEstimate, submitCartInquiries } from '@/lib/cart'
+import {
+  useCartUI,
+  groupBySupplier,
+  groupEstimate,
+  submitCartInquiries,
+  unavailableItems,
+} from '@/lib/cart'
 import { usePreferencesStore } from '@/stores/preferences'
 import { useAuth } from '@/contexts/AuthContext'
 import { useProfile } from '@/hooks/useProfile'
@@ -54,6 +60,9 @@ export function CartDrawer() {
   }, [])
 
   const groups = useMemo(() => groupBySupplier(lines), [lines])
+  // Rows whose supplier could not be resolved are not in any group, so without this they
+  // would be counted in the header but rendered nowhere.
+  const stranded = useMemo(() => unavailableItems(lines), [lines])
   const isGuest = !buyerId
   const isNonBuyer = isAuthenticated && role !== 'buyer'
 
@@ -178,6 +187,26 @@ export function CartDrawer() {
                 </ul>
               </section>
             ))
+          )}
+
+          {!isGuest && stranded.length > 0 && (
+            <div className="mx-5 mt-4 border border-[#C8C4BC] bg-[#EFE9DC] px-4 py-3">
+              <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-[#9C8870]">
+                {stranded.length} unavailable
+              </p>
+              <p className="mt-1 text-xs leading-relaxed text-[#3C2A1A]/65">
+                {stranded.length === 1 ? 'One fabric is' : 'These fabrics are'} no longer
+                offered by their supplier and cannot be sent.{' '}
+                <Link
+                  to="/buyer/cart"
+                  onClick={() => setOpen(false)}
+                  className="underline underline-offset-2 hover:text-[#2C1A0E]"
+                >
+                  Review in the full cart
+                </Link>
+                .
+              </p>
+            </div>
           )}
         </SheetBody>
 

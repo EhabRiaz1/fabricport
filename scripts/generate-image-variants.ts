@@ -5,6 +5,8 @@ import { isDerivedProductImagePath } from '../src/lib/product-images.ts'
 import {
   generateImageVariants,
   getVariantStoragePaths,
+  PRODUCT_IMAGE_VARIANTS,
+  type StoredImageVariant,
 } from './lib/image-variants.ts'
 
 config({ path: '.env.local' })
@@ -50,7 +52,7 @@ async function uploadVariants(originalPath: string, source: Buffer) {
   const variants = await generateImageVariants(source)
   const paths = getVariantStoragePaths(originalPath)
 
-  for (const variant of ['card', 'medium'] as const) {
+  for (const variant of Object.keys(PRODUCT_IMAGE_VARIANTS) as StoredImageVariant[]) {
     const { error } = await supabase.storage.from(BUCKET).upload(paths[variant], variants[variant], {
       contentType: 'image/webp',
       upsert: true,
@@ -92,7 +94,9 @@ async function main() {
       const paths = getVariantStoragePaths(originalPath)
       const checks = await Promise.all([
         supabase.storage.from(BUCKET).download(originalPath),
-        supabase.storage.from(BUCKET).download(paths.card),
+        // Probe the NEWEST tier, not `card`. Probing card would report "variants exist"
+        // for every image generated before `large` was introduced and skip them forever.
+        supabase.storage.from(BUCKET).download(paths.large),
       ])
 
       const original = checks[0]

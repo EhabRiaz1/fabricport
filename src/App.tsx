@@ -1,3 +1,4 @@
+import { lazy, Suspense, useEffect } from 'react'
 import { BrowserRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom'
 import { AuthProvider } from '@/contexts/AuthContext'
 import { SmoothScroll } from '@/components/layout/SmoothScroll'
@@ -6,57 +7,89 @@ import { ErrorBoundary } from '@/components/shared/ErrorBoundary'
 import { Toaster } from '@/components/ui/toaster'
 import { PortalShell } from '@/components/layout/PortalShell'
 import { WishlistSync } from '@/components/marketplace/WishlistSync'
-import HomePage from '@/pages/public/HomePage'
-import MarketplacePage from '@/pages/public/MarketplacePage'
-import FabricDetailPage from '@/pages/public/FabricDetailPage'
-import SupplierPage from '@/pages/public/SupplierPage'
-import VendorsPage from '@/pages/public/VendorsPage'
-import SellPage from '@/pages/public/SellPage'
-import CataloguePage from '@/pages/public/CataloguePage'
-import LoginPage from '@/pages/auth/LoginPage'
-import RegisterPage from '@/pages/auth/RegisterPage'
-import PendingPage from '@/pages/auth/PendingPage'
-import DashboardPage from '@/pages/admin/DashboardPage'
-import ProductsPage from '@/pages/admin/ProductsPage'
-import ProductFormPage from '@/pages/admin/ProductFormPage'
-import SuppliersPage from '@/pages/admin/SuppliersPage'
-import BuyersPage from '@/pages/admin/BuyersPage'
-import UsersPage from '@/pages/admin/UsersPage'
-import AdminMessagesPage from '@/pages/admin/MessagesPage'
-import AdminBillingPage from '@/pages/admin/BillingPage'
-import AdminReportsPage from '@/pages/admin/ReportsPage'
-import AdminCategoriesPage from '@/pages/admin/CategoriesPage'
-import AdminSampleRequestsPage from '@/pages/admin/SampleRequestsPage'
-import LiveMonitorPage from '@/pages/admin/LiveMonitorPage'
-import SupportPage from '@/pages/shared/SupportPage'
-import ListingPipelinePage from '@/pages/admin/ListingPipelinePage'
-import AttributesPage from '@/pages/admin/AttributesPage'
-import InquiriesPage from '@/pages/admin/InquiriesPage'
-import InquiryDetailPage from '@/pages/admin/InquiryDetailPage'
-import SettingsPage from '@/pages/admin/SettingsPage'
-import BuyerDashboardPage from '@/pages/buyer/DashboardPage'
-import BuyerCartPage from '@/pages/buyer/CartPage'
-import BuyerWishlistPage from '@/pages/buyer/WishlistPage'
-import BuyerInquiriesPage from '@/pages/buyer/InquiriesPage'
-import BuyerInquiryDetailPage from '@/pages/buyer/InquiryDetailPage'
-import BuyerInvoicesPage from '@/pages/buyer/InvoicesPage'
-import BuyerInvoiceDetailPage from '@/pages/buyer/InvoiceDetailPage'
-import BuyerSampleRequestsPage from '@/pages/buyer/SampleRequestsPage'
-import BuyerSampleRequestDetailPage from '@/pages/buyer/SampleRequestDetailPage'
-import BuyerSettingsPage from '@/pages/buyer/SettingsPage'
-import SupplierDashboardPage from '@/pages/supplier/DashboardPage'
-import SupplierAnalyticsPage from '@/pages/supplier/AnalyticsPage'
-import SupplierInventoryPage from '@/pages/supplier/InventoryPage'
-import SupplierCataloguesPage from '@/pages/supplier/CataloguesPage'
-import SupplierInquiriesPage from '@/pages/supplier/InquiriesPage'
-import SupplierInquiryDetailPage from '@/pages/supplier/InquiryDetailPage'
-import SupplierInvoicesPage from '@/pages/supplier/InvoicesPage'
-import SupplierSampleRequestsPage from '@/pages/supplier/SampleRequestsPage'
-import SupplierSampleRequestDetailPage from '@/pages/supplier/SampleRequestDetailPage'
-import ListingRequestPage from '@/pages/supplier/ListingRequestPage'
-import InvoiceBuilderPage from '@/pages/supplier/InvoiceBuilderPage'
-import SupplierSettingsPage from '@/pages/supplier/SettingsPage'
-import PendingApprovalPage from '@/pages/supplier/PendingApprovalPage'
+const HomePage = lazy(() => import('@/pages/public/HomePage'))
+const MarketplacePage = lazy(() => import('@/pages/public/MarketplacePage'))
+const FabricDetailPage = lazy(() => import('@/pages/public/FabricDetailPage'))
+const SupplierPage = lazy(() => import('@/pages/public/SupplierPage'))
+const VendorsPage = lazy(() => import('@/pages/public/VendorsPage'))
+const SellPage = lazy(() => import('@/pages/public/SellPage'))
+const CataloguePage = lazy(() => import('@/pages/public/CataloguePage'))
+const LoginPage = lazy(() => import('@/pages/auth/LoginPage'))
+const RegisterPage = lazy(() => import('@/pages/auth/RegisterPage'))
+const PendingPage = lazy(() => import('@/pages/auth/PendingPage'))
+const DashboardPage = lazy(() => import('@/pages/admin/DashboardPage'))
+const ProductsPage = lazy(() => import('@/pages/admin/ProductsPage'))
+const ProductFormPage = lazy(() => import('@/pages/admin/ProductFormPage'))
+const SuppliersPage = lazy(() => import('@/pages/admin/SuppliersPage'))
+const BuyersPage = lazy(() => import('@/pages/admin/BuyersPage'))
+const UsersPage = lazy(() => import('@/pages/admin/UsersPage'))
+const AdminMessagesPage = lazy(() => import('@/pages/admin/MessagesPage'))
+const AdminBillingPage = lazy(() => import('@/pages/admin/BillingPage'))
+const AdminReportsPage = lazy(() => import('@/pages/admin/ReportsPage'))
+const AdminCategoriesPage = lazy(() => import('@/pages/admin/CategoriesPage'))
+const AdminSampleRequestsPage = lazy(() => import('@/pages/admin/SampleRequestsPage'))
+const LiveMonitorPage = lazy(() => import('@/pages/admin/LiveMonitorPage'))
+const SupportPage = lazy(() => import('@/pages/shared/SupportPage'))
+const ListingPipelinePage = lazy(() => import('@/pages/admin/ListingPipelinePage'))
+const AttributesPage = lazy(() => import('@/pages/admin/AttributesPage'))
+const InquiriesPage = lazy(() => import('@/pages/admin/InquiriesPage'))
+const InquiryDetailPage = lazy(() => import('@/pages/admin/InquiryDetailPage'))
+const SettingsPage = lazy(() => import('@/pages/admin/SettingsPage'))
+const BuyerDashboardPage = lazy(() => import('@/pages/buyer/DashboardPage'))
+const BuyerCartPage = lazy(() => import('@/pages/buyer/CartPage'))
+const BuyerWishlistPage = lazy(() => import('@/pages/buyer/WishlistPage'))
+const BuyerInquiriesPage = lazy(() => import('@/pages/buyer/InquiriesPage'))
+const BuyerInquiryDetailPage = lazy(() => import('@/pages/buyer/InquiryDetailPage'))
+const BuyerInvoicesPage = lazy(() => import('@/pages/buyer/InvoicesPage'))
+const BuyerInvoiceDetailPage = lazy(() => import('@/pages/buyer/InvoiceDetailPage'))
+const BuyerSampleRequestsPage = lazy(() => import('@/pages/buyer/SampleRequestsPage'))
+const BuyerSampleRequestDetailPage = lazy(() => import('@/pages/buyer/SampleRequestDetailPage'))
+const BuyerSettingsPage = lazy(() => import('@/pages/buyer/SettingsPage'))
+const SupplierDashboardPage = lazy(() => import('@/pages/supplier/DashboardPage'))
+const SupplierAnalyticsPage = lazy(() => import('@/pages/supplier/AnalyticsPage'))
+const SupplierInventoryPage = lazy(() => import('@/pages/supplier/InventoryPage'))
+const SupplierCataloguesPage = lazy(() => import('@/pages/supplier/CataloguesPage'))
+const SupplierInquiriesPage = lazy(() => import('@/pages/supplier/InquiriesPage'))
+const SupplierInquiryDetailPage = lazy(() => import('@/pages/supplier/InquiryDetailPage'))
+const SupplierInvoicesPage = lazy(() => import('@/pages/supplier/InvoicesPage'))
+const SupplierSampleRequestsPage = lazy(() => import('@/pages/supplier/SampleRequestsPage'))
+const SupplierSampleRequestDetailPage = lazy(() => import('@/pages/supplier/SampleRequestDetailPage'))
+const ListingRequestPage = lazy(() => import('@/pages/supplier/ListingRequestPage'))
+const InvoiceBuilderPage = lazy(() => import('@/pages/supplier/InvoiceBuilderPage'))
+const SupplierSettingsPage = lazy(() => import('@/pages/supplier/SettingsPage'))
+const PendingApprovalPage = lazy(() => import('@/pages/supplier/PendingApprovalPage'))
+
+/**
+ * Deliberately not a spinner. Route chunks land in well under 200ms on a warm connection,
+ * and a spinner that flashes for 150ms reads as jank; a still cream field reads as nothing
+ * happening at all, which is the goal.
+ */
+function RouteFallback() {
+  return (
+    <div className="min-h-screen bg-[#F6F1E9]" aria-busy="true">
+      <span className="sr-only">Loading page</span>
+    </div>
+  )
+}
+
+/**
+ * A lazy chunk that 404s after a deploy (the user's tab is running the previous build)
+ * throws straight into the app-level ErrorBoundary and blanks the whole app. Reload once to
+ * pick up the new manifest, guarded by a session flag so a genuinely broken deploy cannot
+ * put us in a reload loop.
+ */
+function useStaleChunkRecovery() {
+  useEffect(() => {
+    const onPreloadError = (event: Event) => {
+      event.preventDefault()
+      if (sessionStorage.getItem('fp-chunk-reloaded') === '1') return
+      sessionStorage.setItem('fp-chunk-reloaded', '1')
+      window.location.reload()
+    }
+    window.addEventListener('vite:preloadError', onPreloadError)
+    return () => window.removeEventListener('vite:preloadError', onPreloadError)
+  }, [])
+}
 
 function PortalPlaceholder({ title }: { title: string }) {
   return (
@@ -70,12 +103,15 @@ function PortalPlaceholder({ title }: { title: string }) {
 }
 
 export default function App() {
+  useStaleChunkRecovery()
+
   return (
     <ErrorBoundary>
       <AuthProvider>
         <WishlistSync />
         <BrowserRouter>
         <SmoothScroll>
+          <Suspense fallback={<RouteFallback />}>
           <Routes>
             <Route path="/" element={<HomePage />} />
             <Route path="/marketplace" element={<MarketplacePage />} />
@@ -190,6 +226,7 @@ export default function App() {
 
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
+          </Suspense>
         </SmoothScroll>
         <Toaster />
         </BrowserRouter>

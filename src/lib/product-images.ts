@@ -4,6 +4,15 @@ export const PRODUCT_IMAGE_VARIANTS = {
   card: { width: 480, quality: 80 },
   /** Detail hero, featured tiles (~960px, WebP). */
   medium: { width: 960, quality: 82 },
+  /**
+   * Detail hero at 2x DPR and the zoom lens (~1600px, WebP).
+   *
+   * 1600 rather than 1920: the hero is 50vw above 1024px, so a 1440 viewport asks for
+   * 720 CSS px -> 1440 device px at 2x, and 1600 also covers the 2.2x magnifier lens.
+   * Most repaired legacy originals top out at 1080-1320 anyway, and
+   * `withoutEnlargement` makes this tier self-limiting for them.
+   */
+  large: { width: 1600, quality: 82 },
 } as const
 
 export type ProductImageVariant = keyof typeof PRODUCT_IMAGE_VARIANTS | 'original'
@@ -13,7 +22,9 @@ export interface ProductImageOptions {
 }
 
 export function isDerivedProductImagePath(path: string): boolean {
-  return /\.thumb\.(card|medium)\.webp$/i.test(path)
+  // Must list EVERY variant name. A missing one is treated as an original, which then
+  // gets a derived path of its own -- `foo.thumb.large.thumb.card.webp`.
+  return /\.thumb\.(card|medium|large)\.webp$/i.test(path)
 }
 
 /** Deterministic storage path for a pre-generated WebP derivative. */

@@ -19,11 +19,27 @@ export function FeaturedGrid({ products }: FeaturedGridProps) {
 
     const ctx = gsap.context(() => {
       section.querySelectorAll('[data-feature-tile]').forEach((tile, index) => {
+        // The reveal used to animate clipPath: inset(), which is not compositable and
+        // forced a full repaint of the tile on every frame, x5 tiles. A solid overlay panel
+        // slid down on yPercent is visually near-identical and runs on the compositor.
+        const wipe = tile.querySelector('[data-feature-wipe]')
+        if (wipe) {
+          gsap.fromTo(
+            wipe,
+            { yPercent: 0 },
+            {
+              yPercent: 100,
+              duration: 1,
+              delay: (index % 3) * 0.08,
+              ease: 'power3.out',
+              scrollTrigger: { trigger: tile, start: 'top 86%' },
+            },
+          )
+        }
         gsap.fromTo(
           tile,
-          { clipPath: 'inset(0 0 100% 0)', y: 40 },
+          { y: 40 },
           {
-            clipPath: 'inset(0 0 0% 0)',
             y: 0,
             duration: 1,
             delay: (index % 3) * 0.08,
@@ -111,6 +127,13 @@ export function FeaturedGrid({ products }: FeaturedGridProps) {
                     className="h-[112%] w-full object-cover transition-transform duration-700 group-hover:scale-[1.05]"
                   />
                 )}
+                {/* Reveal curtain, slid away on yPercent by the ScrollTrigger above.
+                    Replaces an inset() clip-path animation that repainted every frame. */}
+                <div
+                  data-feature-wipe
+                  aria-hidden
+                  className="pointer-events-none absolute inset-0 z-10 bg-background will-change-transform"
+                />
                 <div className="absolute inset-0 bg-gradient-to-t from-[#1A0E06]/75 via-transparent to-transparent opacity-70 transition-opacity duration-300 group-hover:opacity-90" />
                 <div className="absolute inset-x-0 bottom-0 p-4 lg:p-5">
                   <p

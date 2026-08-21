@@ -24,18 +24,20 @@ export function SupplierMarquee({ suppliers }: SupplierMarqueeProps) {
         ease: 'none',
         duration: 36,
         repeat: -1,
+        paused: true,
       })
 
+      // Run only while the band is on screen. This used to be an unconditional repeat:-1
+      // tween that kept the GSAP ticker busy for the entire session, including while the
+      // user was three sections away.
+      //
+      // The velocity-reactive timeScale boost that lived here is gone: it allocated two new
+      // tweens on EVERY scroll update for an effect nobody reported noticing.
       ScrollTrigger.create({
         trigger: section,
         start: 'top bottom',
         end: 'bottom top',
-        onUpdate: (self) => {
-          const velocity = Math.abs(self.getVelocity())
-          const boost = gsap.utils.clamp(1, 4, 1 + velocity / 900)
-          gsap.to(loop, { timeScale: boost, duration: 0.4, overwrite: true })
-          gsap.to(loop, { timeScale: 1, duration: 1.2, delay: 0.3, overwrite: false })
-        },
+        onToggle: (self) => (self.isActive ? loop.play() : loop.pause()),
       })
     }, section)
 

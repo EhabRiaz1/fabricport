@@ -24,3 +24,10 @@ dist-ssr
 *.sln
 *.sw?
 .gstack/
+
+# Credentials handed over manually — never commit
+adminCred.rtf
+*-credentials.txt
+
+# Repair-run artefacts
+image-repair.jsonl

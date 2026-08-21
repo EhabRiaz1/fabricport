@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { motion, useReducedMotion, useScroll, useTransform } from 'framer-motion'
-import mainBanner from '@/assets/main-banner-bg.png'
+import { BannerImage, bannerPosterSrc } from '@/components/shared/BannerImage'
 import { useBackgroundVideo } from '@/hooks/useBackgroundVideo'
 
 /** Eased count-up that starts once the target becomes known. */
@@ -92,20 +92,21 @@ export function ArchiveHero({
         style={prefersReducedMotion ? undefined : { scale: mediaScale }}
       >
         {prefersReducedMotion ? (
-          <img
-            src={mainBanner}
-            alt=""
-            className="absolute inset-0 h-full w-full object-cover"
-          />
+          <BannerImage className="absolute inset-0" />
         ) : (
+          /*
+           * preload="none", not "metadata": the source file is 10 MB and useBackgroundVideo
+           * only pauses PLAYBACK off-screen -- the browser still fetches it. The AVIF poster
+           * carries the first paint instead.
+           */
           <video
             ref={videoRef}
             muted
             loop
             playsInline
-            preload="metadata"
+            preload="none"
             disableRemotePlayback
-            poster={mainBanner}
+            poster={bannerPosterSrc}
             className="absolute inset-0 h-full w-full object-cover"
           >
             <source src={videoSrc} type="video/mp4" />

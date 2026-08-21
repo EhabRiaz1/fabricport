@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import heroFabric from '@/assets/main-banner-bg.png'
+import { BannerImage } from '@/components/shared/BannerImage'
 import { BrandLogo } from '@/components/layout/BrandLogo'
 
 export interface AuthLayoutProps {
@@ -16,11 +16,7 @@ export function AuthLayout({ children, eyebrow, heading, subheading }: AuthLayou
     <div className="grid min-h-screen bg-background lg:grid-cols-[1.1fr_1fr]">
       {/* Editorial imagery panel */}
       <div className="relative hidden overflow-hidden lg:block">
-        <img
-          src={heroFabric}
-          alt=""
-          className="absolute inset-0 h-full w-full object-cover"
-        />
+        <BannerImage className="absolute inset-0" sizes="(min-width: 1024px) 55vw, 100vw" />
         <div className="absolute inset-0 bg-gradient-to-t from-[#1A0E06]/85 via-[#1A0E06]/30 to-[#1A0E06]/20" />
         <div className="grain absolute inset-0" />
         <div className="relative flex h-full flex-col justify-between p-12">

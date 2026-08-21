@@ -92,12 +92,26 @@ export function AtelierChrome() {
     function onMove(event: MouseEvent) {
       setX(event.clientX)
       setY(event.clientY)
-      const target = (event.target as HTMLElement).closest('a, button')
-      cursor!.dataset.state = target ? 'hover' : 'idle'
+    }
+
+    // Hover state via pointerover/pointerout delegation rather than a closest('a, button')
+    // walk on every mousemove. Boundary events fire only when the hovered element actually
+    // changes, so the DOM traversal goes from ~60x/second to a handful of times per second.
+    function onOver(event: PointerEvent) {
+      if ((event.target as HTMLElement).closest('a, button')) cursor!.dataset.state = 'hover'
+    }
+    function onOut(event: PointerEvent) {
+      if ((event.target as HTMLElement).closest('a, button')) cursor!.dataset.state = 'idle'
     }
 
     window.addEventListener('mousemove', onMove, { passive: true })
-    return () => window.removeEventListener('mousemove', onMove)
+    document.addEventListener('pointerover', onOver, { passive: true })
+    document.addEventListener('pointerout', onOut, { passive: true })
+    return () => {
+      window.removeEventListener('mousemove', onMove)
+      document.removeEventListener('pointerover', onOver)
+      document.removeEventListener('pointerout', onOut)
+    }
   }, [])
 
   return (
@@ -111,7 +125,11 @@ export function AtelierChrome() {
       <div
         ref={cursorRef}
         aria-hidden
-        className="pointer-events-none fixed left-0 top-0 z-[70] -ml-1.5 -mt-1.5 hidden h-3 w-3 rounded-full border border-accent bg-accent/40 mix-blend-difference transition-transform duration-200 data-[state=hover]:scale-[2.2] lg:block"
+        // No mix-blend-difference. A blend mode on a fixed, always-moving element forces
+        // everything painted beneath it into a single non-composited raster group, which is
+        // re-rendered on every frame the dot moves. A solid accent ring reads correctly on
+        // both the dark hero and the cream body.
+        className="pointer-events-none fixed left-0 top-0 z-[70] -ml-1.5 -mt-1.5 hidden h-3 w-3 rounded-full border border-accent bg-accent/25 transition-transform duration-200 will-change-transform data-[state=hover]:scale-[2.2] lg:block"
       />
 
       {/* Curtain intro */}

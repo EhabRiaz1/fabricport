@@ -140,7 +140,9 @@ function FabricClothCanvasComponent({ className, scrollProgressRef }: FabricClot
 
     let renderer: THREE.WebGLRenderer
     try {
-      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' })
+      // antialias:false: MSAA on a full-viewport buffer is largely redundant at the pixel
+      // ratio below, and it is pure fill cost on every frame.
+      renderer = new THREE.WebGLRenderer({ antialias: false, alpha: false, powerPreference: 'high-performance' })
     } catch {
       failedRef.current = true
       container.classList.add('cloth-fallback')
@@ -148,7 +150,7 @@ function FabricClothCanvasComponent({ className, scrollProgressRef }: FabricClot
     }
 
     const reduced = prefersReducedMotion()
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75))
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5))
     container.appendChild(renderer.domElement)
 
     const scene = new THREE.Scene()
@@ -164,7 +166,18 @@ function FabricClothCanvasComponent({ className, scrollProgressRef }: FabricClot
       uScroll: { value: 0 },
     }
 
-    const geometry = new THREE.PlaneGeometry(11, 7.2, 180, 120)
+    /**
+     * Mesh density, halved (and halved again on small screens).
+     *
+     * At 180x120 this is 21,600 segments / ~21,900 vertices, and the vertex shader calls
+     * displace() three times per vertex for finite-difference normals, each doing two
+     * simplex-noise evaluations -- roughly 130k noise evaluations per frame, running
+     * continuously while the user scrolls down into the next section. The displacement is
+     * low-frequency, so the silhouette at hero scale is indistinguishable at 96x64 while
+     * costing about a quarter as much.
+     */
+    const dense = window.innerWidth >= 640
+    const geometry = new THREE.PlaneGeometry(11, 7.2, dense ? 96 : 64, dense ? 64 : 44)
     const material = new THREE.ShaderMaterial({
       vertexShader: VERTEX,
       fragmentShader: FRAGMENT,
@@ -201,22 +214,12 @@ function FabricClothCanvasComponent({ className, scrollProgressRef }: FabricClot
     container.addEventListener('pointermove', onPointerMove)
     container.addEventListener('pointerleave', onPointerLeave)
 
-    let visible = true
-    const io = new IntersectionObserver(
-      (entries) => {
-        visible = entries[0]?.isIntersecting ?? true
-      },
-      { threshold: 0 },
-    )
-    io.observe(container)
-
     const clock = new THREE.Clock()
     let frameId = 0
+    let visible = true
 
     function frame() {
       frameId = requestAnimationFrame(frame)
-      if (!visible) return
-
       uniforms.uTime.value = clock.getElapsedTime()
       uniforms.uMouse.value.lerp(mouseTarget, 0.06)
       uniforms.uMouseStrength.value +=
@@ -225,6 +228,49 @@ function FabricClothCanvasComponent({ className, scrollProgressRef }: FabricClot
 
       renderer.render(scene, camera)
     }
+
+    /**
+     * Genuinely stop when off screen.
+     *
+     * The previous version only skipped `render()` inside the callback: requestAnimationFrame
+     * kept rescheduling forever, and THREE.Clock kept advancing, so returning to the hero made
+     * the cloth jump to a wildly different point in its animation. Clock.stop()/start()
+     * excludes the paused interval, so it resumes exactly where it left off.
+     */
+    // Two independent reasons to pause, tracked separately so that un-hiding the tab does
+    // not resume a canvas that is still scrolled out of view, and vice versa.
+    let inView = true
+    let tabVisible = !document.hidden
+
+    function sync() {
+      if (reduced) return
+      const next = inView && tabVisible
+      if (next === visible) return
+      visible = next
+      if (next) {
+        clock.start()
+        if (!frameId) frame()
+      } else if (frameId) {
+        cancelAnimationFrame(frameId)
+        frameId = 0
+        clock.stop()
+      }
+    }
+
+    const io = new IntersectionObserver(
+      (entries) => {
+        inView = entries[0]?.isIntersecting ?? true
+        sync()
+      },
+      { threshold: 0 },
+    )
+    io.observe(container)
+
+    const onVisibility = () => {
+      tabVisible = !document.hidden
+      sync()
+    }
+    document.addEventListener('visibilitychange', onVisibility)
 
     if (reduced) {
       // Single still frame — no animation loop
@@ -237,6 +283,7 @@ function FabricClothCanvasComponent({ className, scrollProgressRef }: FabricClot
     return () => {
       cancelAnimationFrame(frameId)
       io.disconnect()
+      document.removeEventListener('visibilitychange', onVisibility)
       resizeObserver.disconnect()
       container.removeEventListener('pointermove', onPointerMove)
       container.removeEventListener('pointerleave', onPointerLeave)

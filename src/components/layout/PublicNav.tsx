@@ -35,9 +35,13 @@ export function PublicNav({ className }: PublicNavProps) {
   return (
     <header
       className={cn(
-        'fixed inset-x-0 top-0 z-50 transition-all duration-400',
+        // transition-colors, NOT transition-all: `all` animates backdrop-filter too, so
+        // every flip of `solid` re-rendered a full-width blur for 400ms straight. The blur
+        // radius also drops to md -- cost scales superlinearly with radius, and the
+        // background is already 96% opaque so the blur is barely visible either way.
+        'fixed inset-x-0 top-0 z-50 transition-colors duration-300 [contain:paint]',
         solid
-          ? 'border-b border-[#3C2A1A]/10 bg-[#F6F1E9]/96 backdrop-blur-xl'
+          ? 'border-b border-[#3C2A1A]/10 bg-[#F6F1E9]/96 backdrop-blur-md'
           : 'bg-transparent',
         className,
       )}

@@ -71,7 +71,12 @@ export function FinaleCTA({ textureProduct }: FinaleCTAProps) {
                   WebkitBackgroundClip: 'text',
                   backgroundClip: 'text',
                   color: 'transparent',
-                  filter: 'brightness(1.25) saturate(1.1)',
+                  // No `filter` here. A filter on a background-clipped-text layer forces an
+                  // offscreen render of a heading up to 170px tall on every repaint, and the
+                  // .grain overlay above it repaints too. backgroundBlendMode gets the same
+                  // warmth as part of the normal paint, with no filter layer.
+                  backgroundColor: '#E8A070',
+                  backgroundBlendMode: 'overlay',
                 }
               : { color: '#F5EDE4' }),
           }}

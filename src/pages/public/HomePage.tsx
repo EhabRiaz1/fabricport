@@ -59,12 +59,17 @@ export default function HomePage() {
     () => products.filter((product) => product.images.length > 0),
     [products],
   )
-  const stripProducts = withImages.slice(0, 7)
-  const featuredProducts = withImages.slice(7, 12).length >= 5
-    ? withImages.slice(7, 12)
-    : withImages.slice(0, 5)
-  const scanProduct = withImages[2] ?? withImages[0]
-  const textureProduct = withImages[1] ?? withImages[0]
+  // Memoised so these slices keep a stable identity across renders -- otherwise every
+  // parent render hands MaterialStrip and FeaturedGrid brand-new array props.
+  const { stripProducts, featuredProducts, scanProduct, textureProduct } = useMemo(() => {
+    const tail = withImages.slice(7, 12)
+    return {
+      stripProducts: withImages.slice(0, 7),
+      featuredProducts: tail.length >= 5 ? tail : withImages.slice(0, 5),
+      scanProduct: withImages[2] ?? withImages[0],
+      textureProduct: withImages[1] ?? withImages[0],
+    }
+  }, [withImages])
 
   return (
     <div className="bg-background">

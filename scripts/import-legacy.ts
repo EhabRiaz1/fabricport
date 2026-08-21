@@ -114,13 +114,35 @@ async function importAccounts() {
 
     const { data: sup } = await db.from('suppliers').select('id').eq('id', r.id).maybeSingle()
     if (!sup) {
-      let slug = slugify(company || name)
-      // slug is unique across suppliers; disambiguate rather than fail the row.
-      const { data: clash } = await db.from('suppliers').select('id').eq('slug', slug).maybeSingle()
-      if (clash) slug = `${slug}-${r.id.slice(0, 6)}`
+      const brand = company || name
+      const slug = slugify(brand)
+
+      // A slug clash means this BRAND already has a supplier row -- almost always the
+      // placeholder that seed-catalogue.ts created (seed+<slug>@fabricport.internal).
+      // The original version of this code disambiguated the slug and inserted a second
+      // row, which is what stranded 205 products on accounts nobody could log into and
+      // left 8 brands with two public supplier pages. Adopt the existing row instead:
+      // hand it to this real auth user by moving every reference, then delete it.
+      //
+      // suppliers.id IS the auth user id, so "adopting" means repointing all nine FKs.
+      // That is what 20260821090000_merge_duplicate_suppliers.sql does, and re-running
+      // it is the supported way to reconcile. Fail loudly rather than fork again.
+      const { data: clash } = await db
+        .from('suppliers')
+        .select('id, brand_name')
+        .eq('slug', slug)
+        .maybeSingle()
+      if (clash) {
+        throw new Error(
+          `supplier slug "${slug}" already belongs to ${clash.id} (${clash.brand_name}). ` +
+            `Refusing to create a duplicate supplier row for ${email}. Run the ` +
+            `merge_duplicate_suppliers migration, or repoint that row's id first.`,
+        )
+      }
+
       await db.from('suppliers').insert({
         id: r.id,
-        brand_name: company || name,
+        brand_name: brand,
         slug,
         is_verified: status === 'Active',
       })
@@ -186,12 +208,30 @@ async function importProducts() {
   const products = read<LegacyProduct[]>('legacy-products.json')
 
   const { data: sups } = await db.from('suppliers').select('id, brand_name')
-  const byName = new Map((sups ?? []).map((s) => [s.brand_name.toLowerCase().trim(), s.id]))
+
+  // Build the brand -> id map defensively. This used to be a bare `new Map(...)`, which
+  // silently resolved duplicate brand_names last-write-wins over an unordered SELECT --
+  // so which of two identically-named supplier rows owned a product was luck. The DB now
+  // has a unique index on lower(btrim(brand_name)), but a retired row ("[retired] Foo")
+  // or a future import could still surprise us, so assert instead of guessing.
+  const byName = new Map<string, string>()
+  for (const s of sups ?? []) {
+    if (s.brand_name.startsWith('[retired] ')) continue
+    const key = s.brand_name.toLowerCase().trim()
+    const existing = byName.get(key)
+    if (existing && existing !== s.id) {
+      throw new Error(
+        `two supplier rows share the brand name "${s.brand_name}" (${existing}, ${s.id}). ` +
+          `Merge them before importing products -- see merge_duplicate_suppliers.`,
+      )
+    }
+    byName.set(key, s.id)
+  }
 
   const { data: cats } = await db.from('fabric_categories').select('id, name')
   const catByName = new Map((cats ?? []).map((c) => [c.name.toLowerCase().trim(), c.id]))
 
-  let updated = 0, inserted = 0, skipped = 0
+  let updated = 0, inserted = 0, skipped = 0, reassigned = 0
   const unmatched: string[] = []
 
   for (const p of products) {
@@ -225,18 +265,28 @@ async function importProducts() {
 
     const { data: existing } = await db
       .from('products')
-      .select('id')
+      .select('id, supplier_id')
       .eq('slug', p.slug)
       .maybeSingle()
 
     if (existing) {
-      // Existing (seeded) row: only backfill legacy linkage and the 3D URL.
+      // Existing (seeded) row: backfill legacy linkage, the 3D URL, and OWNERSHIP.
       // Do NOT clobber curated titles, prices, images or colour classification.
+      //
+      // supplier_id belongs in this list. Omitting it is what left 205 seeded products
+      // owned by seed+<slug>@fabricport.internal after this import ran: every one of them
+      // matched by slug, got a legacy_id stamped, and kept its placeholder owner. Ownership
+      // is not curated data -- the legacy export is authoritative for it.
       const { error } = await db
         .from('products')
-        .update({ legacy_id: p.legacy_id, model_embed_url: p.three_d_url || null })
+        .update({
+          legacy_id: p.legacy_id,
+          model_embed_url: p.three_d_url || null,
+          supplier_id: supplierId,
+        })
         .eq('id', existing.id)
       if (error) throw new Error(`${p.slug}: ${error.message}`)
+      if (existing.supplier_id !== supplierId) reassigned++
       updated++
     } else {
       const { error } = await db.from('products').insert(payload)
@@ -247,7 +297,7 @@ async function importProducts() {
   }
 
   writeFileSync(`${DATA}/import-skipped.json`, JSON.stringify(unmatched, null, 1))
-  console.log(JSON.stringify({ updated, inserted, skipped }, null, 1))
+  console.log(JSON.stringify({ updated, inserted, skipped, reassigned }, null, 1))
 }
 
 const mode = process.argv[2]

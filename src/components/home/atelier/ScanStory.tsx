@@ -108,10 +108,16 @@ export function ScanStory({ product }: ScanStoryProps) {
           </div>
 
           {/* Measured swatch */}
-          <div className="relative mx-auto w-full max-w-[440px]" style={{ perspective: '1200px' }}>
+          {/* The drop shadow lives on this untransformed wrapper, not on the rotating
+              element. A large blurred box-shadow on a element being scrubbed through
+              rotateX/rotateY is re-rasterised on every frame of the scroll. */}
+          <div
+            className="relative mx-auto w-full max-w-[440px] shadow-lg shadow-[#50321433]"
+            style={{ perspective: '1200px' }}
+          >
             <div
               data-scan-swatch
-              className="clip-corner relative aspect-[4/5] overflow-hidden bg-[#C8B49A] shadow-2xl shadow-[#50321433]"
+              className="clip-corner relative aspect-[4/5] overflow-hidden bg-[#C8B49A]"
               style={{ transformStyle: 'preserve-3d' }}
             >
               {image ? (

@@ -45,13 +45,28 @@ export function ColorRibbon() {
     return () => ctx.revert()
   }, [])
 
-  const tint = active ? SWATCHES[active].tint : '#F6F1E9'
+  /**
+   * The room tint is written straight to a CSS custom property on the section rather than
+   * held in React state. Previously every hover across the twelve links set state, which
+   * re-rendered all twelve and repainted the full-width section for 700ms. `active` is still
+   * state, but only because the heading word needs it -- the tint no longer costs a render.
+   */
+  const setTint = (family: ColorFamily | null) => {
+    setActive(family)
+    sectionRef.current?.style.setProperty(
+      '--ribbon-tint',
+      family ? SWATCHES[family].tint : '#F6F1E9',
+    )
+  }
 
   return (
     <section
       ref={sectionRef}
-      className="relative overflow-hidden py-28 transition-colors duration-700 lg:py-36"
-      style={{ backgroundColor: tint }}
+      className="relative overflow-hidden py-28 lg:py-36"
+      style={{
+        backgroundColor: 'var(--ribbon-tint, #F6F1E9)',
+        transition: 'background-color 500ms ease',
+      }}
     >
       <div className="mx-auto max-w-7xl px-6 lg:px-8">
         <div className="flex flex-wrap items-end justify-between gap-6">
@@ -82,8 +97,8 @@ export function ColorRibbon() {
               key={family}
               to={`/marketplace?colors=${family}`}
               data-ribbon-swatch
-              onMouseEnter={() => setActive(family)}
-              onMouseLeave={() => setActive(null)}
+              onMouseEnter={() => setTint(family)}
+              onMouseLeave={() => setTint(null)}
               className="group block"
             >
               <span

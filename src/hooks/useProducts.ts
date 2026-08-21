@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase } from '@/lib/supabase'
+import { applyProductFilters } from '@/lib/product-filters'
 import type { MarketplaceFilters, ProductWithRelations } from '@/types/app'
 
 const PRODUCT_SELECT = `
@@ -112,18 +113,7 @@ export async function fetchProductsPage(
 
     if (featured) query = query.eq('is_featured', true)
     if (to !== undefined) query = query.range(from, to)
-    if (filters?.search) query = query.ilike('title', `%${filters.search}%`)
-    if (filters?.colorFamilies?.length) {
-      query = query.in('color_family', filters.colorFamilies)
-    }
-    if (filters?.priceMin != null) query = query.gte('price_min_pkr', filters.priceMin)
-    if (filters?.priceMax != null) query = query.lte('price_max_pkr', filters.priceMax)
-    // GSM is a real column now, so it filters server-side. Doing it after
-    // pagination (as before) corrupted `total` and `hasMore`.
-    if (filters?.gsmMin != null) query = query.gte('gsm', filters.gsmMin)
-    if (filters?.gsmMax != null) query = query.lte('gsm', filters.gsmMax)
-    if (supplierId) query = query.eq('supplier_id', supplierId)
-    if (categoryId) query = query.eq('category_id', categoryId)
+    query = applyProductFilters(query, filters, { supplierId, categoryId })
 
     const { data, error, count } = await query
     if (error) throw new Error(error.message)
@@ -140,16 +130,7 @@ export async function fetchProductsPage(
 
   if (featured) query = query.eq('is_featured', true)
   if (limit) query = query.limit(limit)
-  if (filters?.search) query = query.ilike('title', `%${filters.search}%`)
-  if (filters?.colorFamilies?.length) {
-    query = query.in('color_family', filters.colorFamilies)
-  }
-  if (filters?.priceMin != null) query = query.gte('price_min_pkr', filters.priceMin)
-  if (filters?.priceMax != null) query = query.lte('price_max_pkr', filters.priceMax)
-  if (filters?.gsmMin != null) query = query.gte('gsm', filters.gsmMin)
-  if (filters?.gsmMax != null) query = query.lte('gsm', filters.gsmMax)
-  if (supplierId) query = query.eq('supplier_id', supplierId)
-  if (categoryId) query = query.eq('category_id', categoryId)
+  query = applyProductFilters(query, filters, { supplierId, categoryId })
 
   const { data, error, count } = await query
   if (error) throw new Error(error.message)

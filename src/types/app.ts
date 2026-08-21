@@ -56,6 +56,18 @@ export interface FabricCardProps {
 export type MarketplaceSort = 'newest' | 'price_asc' | 'price_desc'
 
 export interface MarketplaceFilters {
+  /** Spec facets, projected onto products.spec_facets by trigger. */
+  fabricTypes?: string[]
+  patterns?: string[]
+  weaves?: string[]
+  knitTypes?: string[]
+  chemicalFinishes?: string[]
+  mechanicalFinishes?: string[]
+  /** Normalised fibre families ("Cotton" covers Organic/BCI/Supima/Recycled cotton). */
+  fibres?: string[]
+  garments?: string[]
+  widthMin?: number
+  widthMax?: number
   categorySlug?: string
   colorFamilies?: ColorFamily[]
   supplierSlug?: string

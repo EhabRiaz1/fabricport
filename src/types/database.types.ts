@@ -112,6 +112,24 @@ export interface SupplierNotificationSettings {
   message_received: NotificationChannelSettings
 }
 
+/**
+ * Derived read model of the filterable product attributes, maintained by trigger.
+ * See the product_spec_facets migration. Never written directly.
+ */
+export interface ProductSpecFacets {
+  type?: string
+  pattern?: string
+  weave?: string
+  knit_type?: string
+  chemical_finish?: string
+  mechanical_finish?: string
+  garments?: string[]
+  /** Fibre names exactly as the mill wrote them. */
+  fibres?: string[]
+  /** Normalised for filtering: "Cotton" covers Organic/BCI/Supima/Recycled cotton. */
+  fibre_families?: string[]
+}
+
 export interface ColorSamplePoint {
   image_index: number
   x: number
@@ -383,6 +401,7 @@ export interface Database {
           gsm: number | null
           width_inches: number | null
           composition: string | null
+          spec_facets: ProductSpecFacets
           sample_available: boolean
           video_url: string | null
           images: string[]
@@ -426,6 +445,7 @@ export interface Database {
           gsm?: number | null
           width_inches?: number | null
           composition?: string | null
+          spec_facets?: ProductSpecFacets
           sample_available?: boolean
           video_url?: string | null
           images?: string[]
@@ -468,6 +488,7 @@ export interface Database {
           gsm?: number | null
           width_inches?: number | null
           composition?: string | null
+          spec_facets?: ProductSpecFacets
           sample_available?: boolean
           video_url?: string | null
           images?: string[]

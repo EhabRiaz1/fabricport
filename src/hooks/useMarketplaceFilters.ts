@@ -2,7 +2,25 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { COLOR_FAMILIES, type ColorFamily } from '@/lib/color/classify'
 import { useDebouncedValue } from '@/hooks/useDebouncedValue'
+import { countActiveFilters } from '@/lib/product-filters'
 import type { MarketplaceFilters } from '@/types/app'
+
+/**
+ * Multi-select facets, and the query-string key each uses.
+ *
+ * Kept as one table so a new facet is a single line rather than four edits scattered through
+ * the serialiser, the parser and the clear logic.
+ */
+const LIST_FACETS: [keyof MarketplaceFilters, string][] = [
+  ['fabricTypes', 'type'],
+  ['patterns', 'pattern'],
+  ['weaves', 'weave'],
+  ['knitTypes', 'knit'],
+  ['chemicalFinishes', 'cfinish'],
+  ['mechanicalFinishes', 'mfinish'],
+  ['fibres', 'fibre'],
+  ['garments', 'garment'],
+]
 
 export function filtersFromParams(params: URLSearchParams): MarketplaceFilters {
   const filters: MarketplaceFilters = {}
@@ -21,11 +39,20 @@ export function filtersFromParams(params: URLSearchParams): MarketplaceFilters {
   if (search) filters.search = search
   const sort = params.get('sort')
   if (sort === 'price_asc' || sort === 'price_desc') filters.sort = sort
+  for (const [key, param] of LIST_FACETS) {
+    const raw = params.get(param)
+    if (raw) {
+      const values = raw.split(',').map((v) => v.trim()).filter(Boolean)
+      if (values.length) (filters[key] as string[]) = values
+    }
+  }
   for (const [key, param] of [
     ['priceMin', 'price_min'],
     ['priceMax', 'price_max'],
     ['gsmMin', 'gsm_min'],
     ['gsmMax', 'gsm_max'],
+    ['widthMin', 'width_min'],
+    ['widthMax', 'width_max'],
   ] as const) {
     const raw = params.get(param)
     if (raw != null && raw !== '' && !Number.isNaN(Number(raw))) {
@@ -46,19 +73,13 @@ export function paramsFromFilters(filters: MarketplaceFilters): URLSearchParams 
   if (filters.priceMax != null) params.set('price_max', String(filters.priceMax))
   if (filters.gsmMin != null) params.set('gsm_min', String(filters.gsmMin))
   if (filters.gsmMax != null) params.set('gsm_max', String(filters.gsmMax))
+  if (filters.widthMin != null) params.set('width_min', String(filters.widthMin))
+  if (filters.widthMax != null) params.set('width_max', String(filters.widthMax))
+  for (const [key, param] of LIST_FACETS) {
+    const values = filters[key] as string[] | undefined
+    if (values?.length) params.set(param, values.join(','))
+  }
   return params
-}
-
-/** Number of user-visible facets in play. Sort is not a filter. */
-export function countActiveFilters(filters: MarketplaceFilters): number {
-  let n = 0
-  if (filters.categorySlug) n++
-  if (filters.supplierSlug) n++
-  if (filters.colorFamilies?.length) n += filters.colorFamilies.length
-  if (filters.priceMin != null || filters.priceMax != null) n++
-  if (filters.gsmMin != null || filters.gsmMax != null) n++
-  if (filters.search) n++
-  return n
 }
 
 /**
@@ -118,6 +139,20 @@ export function useMarketplaceFilters() {
     })
   }, [])
 
+  /** Add/remove one option in a multi-select facet. */
+  const toggleListValue = useCallback(
+    (key: keyof MarketplaceFilters, value: string) => {
+      setFilters((prev) => {
+        const current = (prev[key] as string[] | undefined) ?? []
+        const next = current.includes(value)
+          ? current.filter((v) => v !== value)
+          : [...current, value]
+        return { ...prev, [key]: next.length ? next : undefined }
+      })
+    },
+    [],
+  )
+
   const clearAll = useCallback(() => {
     setFilters((prev) => ({ sort: prev.sort }))
   }, [])
@@ -134,6 +169,7 @@ export function useMarketplaceFilters() {
     patch,
     replaceFacets,
     toggleColor,
+    toggleListValue,
     clearAll,
     activeCount,
     pending,

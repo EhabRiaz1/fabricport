@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils'
 import { PublicNav } from '@/components/layout/PublicNav'
 import { Footer } from '@/components/layout/Footer'
 import { ActiveFilterChips } from '@/components/marketplace/ActiveFilterChips'
-import { FilterPanel } from '@/components/marketplace/FilterPanel'
+import { FilterPanel, type SpecFacetCounts } from '@/components/marketplace/FilterPanel'
 import { Sheet, SheetContent, SheetBody, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Input } from '@/components/ui/input'
 import { ArchiveHero } from '@/components/marketplace/ArchiveHero'
@@ -67,6 +67,7 @@ export default function MarketplacePage() {
     patch,
     replaceFacets,
     toggleColor,
+    toggleListValue,
     clearAll,
     activeCount,
     pending: filtersPending,
@@ -78,9 +79,10 @@ export default function MarketplacePage() {
     bySupplier: Record<string, number>
     byCategory: Record<string, number>
     byColor: Partial<Record<ColorFamily, number>>
+    bySpec: SpecFacetCounts
     totalMeters: number
     totalPublished: number
-  }>({ bySupplier: {}, byCategory: {}, byColor: {}, totalMeters: 0, totalPublished: 0 })
+  }>({ bySupplier: {}, byCategory: {}, byColor: {}, bySpec: {}, totalMeters: 0, totalPublished: 0 })
   const [fxRate, setFxRate] = useState(278)
   const { currency, unit } = usePreferencesStore()
   const {
@@ -110,15 +112,24 @@ export default function MarketplacePage() {
         supabase.from('fabric_categories').select('id, name, slug').order('name'),
         supabase
           .from('products')
-          .select('supplier_id, category_id, color_family, stock_meters')
+          // spec_facets rides along so the sidebar's option lists and counts come from the
+          // same single scan rather than a query per facet group.
+          .select('supplier_id, category_id, color_family, stock_meters, spec_facets')
           .eq('status', 'published'),
       ])
 
       const bySupplier: Record<string, number> = {}
       const byCategory: Record<string, number> = {}
       const byColor: Partial<Record<ColorFamily, number>> = {}
+      const bySpec: SpecFacetCounts = {}
       let totalMeters = 0
       const rows = productsRes.data ?? []
+
+      const tally = (facet: string, value: string) => {
+        const group = (bySpec[facet] ??= {})
+        group[value] = (group[value] ?? 0) + 1
+      }
+
       for (const row of rows) {
         if (row.supplier_id) bySupplier[row.supplier_id] = (bySupplier[row.supplier_id] ?? 0) + 1
         if (row.category_id) byCategory[row.category_id] = (byCategory[row.category_id] ?? 0) + 1
@@ -127,8 +138,21 @@ export default function MarketplacePage() {
           byColor[family] = (byColor[family] ?? 0) + 1
         }
         totalMeters += row.stock_meters ?? 0
+
+        const facets = (row.spec_facets ?? {}) as Record<string, string | string[]>
+        for (const [facet, value] of Object.entries(facets)) {
+          if (Array.isArray(value)) for (const v of value) tally(facet, v)
+          else if (value) tally(facet, value)
+        }
       }
-      setFacetCounts({ bySupplier, byCategory, byColor, totalMeters, totalPublished: rows.length })
+      setFacetCounts({
+        bySupplier,
+        byCategory,
+        byColor,
+        bySpec,
+        totalMeters,
+        totalPublished: rows.length,
+      })
 
       setCategories(
         (categoriesRes.data ?? []).map((category) => ({
@@ -277,11 +301,13 @@ export default function MarketplacePage() {
                 filters={filters}
                 onPatch={patch}
                 onToggleColor={toggleColor}
+                onToggleValue={toggleListValue}
                 onClearAll={clearAll}
                 activeCount={activeCount}
                 categories={categories}
                 suppliers={supplierOptions}
                 colorCounts={facetCounts.byColor}
+                specCounts={facetCounts.bySpec}
               />
             </div>
           </aside>
@@ -505,11 +531,13 @@ export default function MarketplacePage() {
               filters={filters}
               onPatch={patch}
               onToggleColor={toggleColor}
+              onToggleValue={toggleListValue}
               onClearAll={clearAll}
               activeCount={activeCount}
               categories={categories}
               suppliers={supplierOptions}
               colorCounts={facetCounts.byColor}
+              specCounts={facetCounts.bySpec}
             />
           </SheetBody>
           <div className="border-t border-[#C8C4BC] px-5 py-4">

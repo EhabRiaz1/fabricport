@@ -5,16 +5,45 @@ import { COLOR_SWATCH_HEX } from '@/lib/color/swatches'
 import { Input } from '@/components/ui/input'
 import type { FabricFilterOption, MarketplaceFilters } from '@/types/app'
 
+/** facet key in products.spec_facets -> option value -> number of published fabrics. */
+export type SpecFacetCounts = Record<string, Record<string, number>>
+
+/**
+ * The spec groups, in the order they appear.
+ *
+ * Ordered by how much of the catalogue each one actually covers. The well-populated facets
+ * sit at the top and open; the sparse ones sit below and start collapsed, because ticking
+ * "Weave: Dobby" legitimately hides most of the catalogue and that should be a deliberate
+ * act rather than a surprise. Every option carries its count for the same reason.
+ */
+const SPEC_GROUPS: {
+  facet: string
+  filterKey: keyof MarketplaceFilters
+  label: string
+  open?: boolean
+}[] = [
+  { facet: 'fibre_families', filterKey: 'fibres', label: 'Composition', open: true },
+  { facet: 'type', filterKey: 'fabricTypes', label: 'Fabric type', open: true },
+  { facet: 'pattern', filterKey: 'patterns', label: 'Pattern' },
+  { facet: 'weave', filterKey: 'weaves', label: 'Weave' },
+  { facet: 'knit_type', filterKey: 'knitTypes', label: 'Knit type' },
+  { facet: 'chemical_finish', filterKey: 'chemicalFinishes', label: 'Chemical finish' },
+  { facet: 'mechanical_finish', filterKey: 'mechanicalFinishes', label: 'Mechanical finish' },
+  { facet: 'garments', filterKey: 'garments', label: 'Garment type' },
+]
+
 export interface FilterPanelProps {
   filters: MarketplaceFilters
   onPatch: (next: Partial<MarketplaceFilters>) => void
   onToggleColor: (family: ColorFamily) => void
+  onToggleValue: (key: keyof MarketplaceFilters, value: string) => void
   onClearAll: () => void
   activeCount: number
   categories: FabricFilterOption[]
   suppliers: FabricFilterOption[]
   /** Published-fabric count per colour family; families at 0 are hidden. */
   colorCounts: Partial<Record<ColorFamily, number>>
+  specCounts: SpecFacetCounts
   className?: string
 }
 
@@ -34,11 +63,13 @@ export function FilterPanel({
   filters,
   onPatch,
   onToggleColor,
+  onToggleValue,
   onClearAll,
   activeCount,
   categories,
   suppliers,
   colorCounts,
+  specCounts,
   className,
 }: FilterPanelProps) {
   const selectedColors = filters.colorFamilies ?? []
@@ -175,6 +206,54 @@ export function FilterPanel({
           />
         </div>
       </FacetGroup>
+
+      <FacetGroup label="Width (inches)">
+        <div className="flex items-center gap-2">
+          <RangeInput
+            label="Min"
+            value={filters.widthMin}
+            onChange={(value) => onPatch({ widthMin: value })}
+          />
+          <span className="pt-4 text-[#9C8870]">–</span>
+          <RangeInput
+            label="Max"
+            value={filters.widthMax}
+            onChange={(value) => onPatch({ widthMax: value })}
+          />
+        </div>
+      </FacetGroup>
+
+      {SPEC_GROUPS.map((group) => {
+        const counts = specCounts[group.facet] ?? {}
+        const selected = (filters[group.filterKey] as string[] | undefined) ?? []
+        // Most-common first; a selected option always stays listed even if the count scan
+        // has not caught up, so a filter can always be undone from the panel that set it.
+        const options = Array.from(
+          new Set([...Object.keys(counts), ...selected]),
+        ).sort((a, b) => (counts[b] ?? 0) - (counts[a] ?? 0) || a.localeCompare(b))
+        if (options.length === 0) return null
+
+        return (
+          <FacetGroup
+            key={group.facet}
+            label={group.label}
+            open={group.open}
+            count={options.length}
+          >
+            <ul className="flex flex-col">
+              {options.map((option) => (
+                <FacetRow
+                  key={option}
+                  label={option}
+                  count={counts[option]}
+                  selected={selected.includes(option)}
+                  onSelect={() => onToggleValue(group.filterKey, option)}
+                />
+              ))}
+            </ul>
+          </FacetGroup>
+        )
+      })}
     </div>
   )
 }

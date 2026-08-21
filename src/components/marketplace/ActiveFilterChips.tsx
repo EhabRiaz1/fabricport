@@ -76,6 +76,36 @@ export function ActiveFilterChips({
       onRemove: () => onChange({ ...filters, gsmMin: undefined, gsmMax: undefined }),
     })
   }
+  if (filters.widthMin != null || filters.widthMax != null) {
+    chips.push({
+      key: 'width',
+      label: `Width ${filters.widthMin ?? 0}–${filters.widthMax ?? '∞'}"`,
+      onRemove: () => onChange({ ...filters, widthMin: undefined, widthMax: undefined }),
+    })
+  }
+  // Spec facets. Without these a weave or fibre filter would be applied with nothing in the
+  // toolbar to show for it -- the results would just be mysteriously short.
+  for (const key of [
+    'fibres',
+    'fabricTypes',
+    'patterns',
+    'weaves',
+    'knitTypes',
+    'chemicalFinishes',
+    'mechanicalFinishes',
+    'garments',
+  ] as const) {
+    for (const value of filters[key] ?? []) {
+      chips.push({
+        key: `${key}-${value}`,
+        label: value,
+        onRemove: () => {
+          const next = (filters[key] ?? []).filter((v) => v !== value)
+          onChange({ ...filters, [key]: next.length ? next : undefined })
+        },
+      })
+    }
+  }
   if (filters.search) {
     chips.push({
       key: 'search',

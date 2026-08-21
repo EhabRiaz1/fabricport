@@ -153,7 +153,37 @@ function parseNumber(value: string): number | null {
   return m ? Number(m[1]) : null
 }
 
+/**
+ * legacy_id -> "Stock" / "Made to Order" / "Greige Stock".
+ *
+ * Fabric Type is a column on the control panel's product LIST, present for every product,
+ * but on the product FORM it is a dropdown that reads empty for most of them. Reading it
+ * from the list is the difference between the facet covering 205 products and all of them.
+ */
+async function fetchTypeByLegacyId(): Promise<Map<number, string>> {
+  const body = await get(
+    `${MSCP}/ajax/catalog/get-products.php?sEcho=1&iDisplayStart=0&iDisplayLength=2000` +
+      `&iColumns=10&iSortCol_0=0&sSortDir_0=asc&iSortingCols=1&sSearch=&Type=&Category=&Supplier=&Status=`,
+  )
+  const map = new Map<number, string>()
+  if (!body) return map
+  try {
+    const json = JSON.parse(body) as { aaData: unknown[][] }
+    for (const row of json.aaData ?? []) {
+      const id = Number(String(row[1]).match(/ProductId=(\d+)/)?.[1])
+      const type = String(row[2] ?? '').trim()
+      if (id && type) map.set(id, type)
+    }
+  } catch {
+    // A non-JSON body means the session lapsed; the caller just gets an empty map.
+  }
+  return map
+}
+
 async function main() {
+  const typeByLegacyId = await fetchTypeByLegacyId()
+  console.log(`fabric types from the product list: ${typeByLegacyId.size}`)
+
   const { data: attributes, error: attrErr } = await db
     .from('fabric_attributes')
     .select('id, name, slug, type')
@@ -257,6 +287,9 @@ async function main() {
       if (gsmRaw) {
         push('weight-before-wash', ozRaw ? `${gsmRaw} GSM | ${ozRaw} Oz` : `${gsmRaw} GSM`)
       }
+
+      const listType = product.legacy_id != null ? typeByLegacyId.get(product.legacy_id) : undefined
+      if (listType) push('type', listType)
 
       for (const [label, value] of Object.entries(specs)) {
         const key = norm(label)

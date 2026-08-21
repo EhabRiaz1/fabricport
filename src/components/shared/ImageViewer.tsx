@@ -57,6 +57,7 @@ export function ImageViewer({
         showClose={false}
         className="h-[100dvh] max-w-none border-0 bg-[#140A04] p-0"
         aria-label={`${alt} — full size`}
+        aria-describedby={undefined}
       >
         <div className="relative flex h-full flex-col">
           <div className="flex items-center justify-between px-5 py-4">

@@ -123,6 +123,7 @@ export function SupportWidget() {
             side="bottom"
             showClose={false}
             aria-label="Support chat"
+            aria-describedby={undefined}
             className="h-[92dvh] max-w-none bg-[#F6F1E9] p-0"
           >
             {panel}

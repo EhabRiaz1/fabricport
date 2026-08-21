@@ -485,7 +485,12 @@ export default function MarketplacePage() {
 
       {/* Below lg the same panel renders inside a left sheet. One component, two shells. */}
       <Sheet open={filterSheetOpen} onOpenChange={setFilterSheetOpen}>
-        <SheetContent side="left" className="w-[86vw] max-w-sm bg-[#F6F1E9]">
+        <SheetContent
+          side="left"
+          className="w-[86vw] max-w-sm bg-[#F6F1E9]"
+          // No SheetDescription here; tell Radix that is deliberate.
+          aria-describedby={undefined}
+        >
           <SheetHeader className="border-[#C8C4BC]">
             <SheetTitle className="text-[#2C1A0E]">Filters</SheetTitle>
           </SheetHeader>

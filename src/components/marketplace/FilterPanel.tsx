@@ -196,7 +196,9 @@ function FacetGroup({
 }) {
   return (
     <details open={open} className="group">
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-2 border-b border-[#C8C4BC] pb-2 [&::-webkit-details-marker]:hidden">
+      {/* The sheet moves focus to the first focusable element on open, which lands here.
+          The browser default is a loud blue ring, so use the accent hairline instead. */}
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-2 border-b border-[#C8C4BC] pb-2 outline-none focus-visible:border-[#E8593C] [&::-webkit-details-marker]:hidden">
         <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-[#3C2A1A]">
           {label}
         </span>

@@ -53,6 +53,15 @@ export function ZoomImage({
   const pendingRef = useRef<{ x: number; y: number } | null>(null)
   const [zoomed, setZoomed] = useState(false)
   const [canHover, setCanHover] = useState(false)
+  /**
+   * Falls back to the untouched original if the `large` derivative is missing.
+   *
+   * `large` was introduced with this work and is generated per image; anything added before
+   * the sweep finishes -- or any original sharp could not process -- simply has no 1600px
+   * file, and hovering would 404 into a broken frame.
+   */
+  const [largeFailed, setLargeFailed] = useState(false)
+  const zoomSrc = largeFailed ? variants.original : variants.large
   const reduced = useReducedMotion()
 
   useEffect(() => {
@@ -91,7 +100,8 @@ export function ZoomImage({
     if (!canHover) return
     // Warm the full-size file on first hover only; the browser caches it thereafter.
     const preload = new Image()
-    preload.src = variants.large
+    preload.onerror = () => setLargeFailed(true)
+    preload.src = zoomSrc
     setZoomed(true)
   }
 
@@ -131,12 +141,17 @@ export function ZoomImage({
         // 1.22:1, so cover in a square frame shears up to 18% off the sides of a landscape
         // photograph. The frame stays square for every product so the two-column layout
         // never jumps.
-        src={zoomed ? variants.large : variants.medium}
+        src={zoomed ? zoomSrc : variants.medium}
         srcSet={
           zoomed
             ? undefined
-            : `${variants.card} 480w, ${variants.medium} 960w, ${variants.large} 1600w`
+            : largeFailed
+              ? `${variants.card} 480w, ${variants.medium} 960w`
+              : `${variants.card} 480w, ${variants.medium} 960w, ${variants.large} 1600w`
         }
+        onError={() => {
+          if (!largeFailed) setLargeFailed(true)
+        }}
         sizes={zoomed ? undefined : sizes}
         alt={alt}
         loading="eager"

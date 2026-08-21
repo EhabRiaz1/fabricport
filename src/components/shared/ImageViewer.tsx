@@ -29,9 +29,14 @@ export function ImageViewer({
   alt,
 }: ImageViewerProps) {
   const [loaded, setLoaded] = useState(false)
+  // As in ZoomImage: not every image has a `large` derivative yet.
+  const [largeFailed, setLargeFailed] = useState(false)
   const current = images[index]
 
-  useEffect(() => setLoaded(false), [index])
+  useEffect(() => {
+    setLoaded(false)
+    setLargeFailed(false)
+  }, [index])
 
   useEffect(() => {
     if (!open) return
@@ -76,9 +81,10 @@ export function ImageViewer({
             <div className="flex min-h-full items-center justify-center p-4">
               <img
                 key={current.large}
-                src={current.large}
+                src={largeFailed ? current.original : current.large}
                 alt={alt}
                 onLoad={() => setLoaded(true)}
+                onError={() => setLargeFailed(true)}
                 className="max-h-full w-auto max-w-none object-contain transition-opacity duration-200"
                 style={{ opacity: loaded ? 1 : 0 }}
               />

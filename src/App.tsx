@@ -81,6 +81,11 @@ function RouteFallback() {
  * throws straight into the app-level ErrorBoundary and blanks the whole app. Reload once to
  * pick up the new manifest, guarded by a session flag so a genuinely broken deploy cannot
  * put us in a reload loop.
+ *
+ * This depends on a missing asset actually returning 404. `vercel.json` rewrites unmatched
+ * routes to index.html so that deep links survive a refresh -- but the rewrite deliberately
+ * excludes paths containing a dot, so a stale /assets/*.js request still fails properly
+ * rather than resolving to an HTML page the browser would try to parse as JavaScript.
  */
 function useStaleChunkRecovery() {
   useEffect(() => {

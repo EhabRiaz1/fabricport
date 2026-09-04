@@ -40,7 +40,19 @@ if (!URL_ || !KEY) {
 
 const argv = process.argv.slice(2)
 const COMMIT = argv.includes('--commit')
-const LIMIT = Number(argv.find((a) => a.startsWith('--limit='))?.split('=')[1] ?? 0)
+/**
+ * Validated, not coerced. `Number('abc')` is NaN and `Number('')` is 0, and both are
+ * falsy where LIMIT is used -- so a typo'd `--limit` would silently run the whole
+ * 1.2 GB import under `--commit` instead of the handful that was asked for.
+ */
+const LIMIT_ARG = argv.find((a) => a.startsWith('--limit='))?.split('=')[1]
+if (LIMIT_ARG !== undefined) {
+  const parsed = Number(LIMIT_ARG)
+  if (!Number.isInteger(parsed) || parsed < 1) {
+    throw new Error(`--limit must be a positive integer, got "${LIMIT_ARG}"`)
+  }
+}
+const LIMIT = LIMIT_ARG === undefined ? 0 : Number(LIMIT_ARG)
 const CONCURRENCY = Math.max(
   1,
   Number(argv.find((a) => a.startsWith('--concurrency='))?.split('=')[1] ?? 8),
@@ -248,7 +260,14 @@ let failed = 0
 // in memory at once for no wall-clock gain over a single saturated uplink.
 for (const [index, job] of planned.entries()) {
   const size = await headSize(job.remote)
-  if (size != null && size > MAX_BYTES) {
+  // A failed probe must not skip the ceiling check by defaulting to "fine" -- the upload
+  // would just fail later with a less obvious error.
+  if (size == null) {
+    console.warn(`  ! ${job.file}: could not read the source size, skipping`)
+    failed++
+    continue
+  }
+  if (size > MAX_BYTES) {
     console.warn(`  ! ${job.file}: ${(size / 1024 ** 2).toFixed(1)} MB exceeds the bucket limit`)
     skippedTooBig++
     continue
@@ -260,7 +279,7 @@ for (const [index, job] of planned.entries()) {
     failed++
     continue
   }
-  if (size != null && body.length !== size) {
+  if (body.length !== size) {
     console.warn(`  ! ${job.file}: short read (${body.length} of ${size} bytes)`)
     failed++
     continue

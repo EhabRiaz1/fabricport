@@ -23,7 +23,7 @@ import { getLenis } from '@/lib/lenis'
  * `navigationType` is still read for the POP guard; it is simply no longer a trigger.
  */
 export function ScrollToTop() {
-  const { pathname } = useLocation()
+  const { pathname, key } = useLocation()
   const navigationType = useNavigationType()
   const lastPathname = useRef<string | null>(null)
 
@@ -34,8 +34,14 @@ export function ScrollToTop() {
   }, [])
 
   useEffect(() => {
-    if (lastPathname.current === pathname) return
+    const samePathname = lastPathname.current === pathname
     lastPathname.current = pathname
+
+    // A PUSH is always a deliberate navigation, even to the page you are already on:
+    // clicking "Marketplace" in the header while halfway down the marketplace should
+    // take you back to the top. Only a same-pathname REPLACE is ignored, and that is
+    // exactly what `useMarketplaceFilters` emits when it rewrites the query string.
+    if (samePathname && navigationType !== 'PUSH') return
 
     if (navigationType === 'POP') return
 
@@ -46,9 +52,12 @@ export function ScrollToTop() {
       lenis.scrollTo(0, { immediate: true, force: true })
     }
     window.scrollTo(0, 0)
-    // navigationType is read, not depended on -- see the note above.
+    // Keyed on `location.key`, which is unique per history entry, so a PUSH to the
+    // pathname you are already on still re-runs this. `navigationType` deliberately
+    // stays out of the array -- it changing on its own (POP -> REPLACE on the first
+    // filter click) is what used to throw the marketplace to the top.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pathname])
+  }, [key, pathname])
 
   return null
 }

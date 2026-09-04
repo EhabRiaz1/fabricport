@@ -80,6 +80,8 @@ export function ZoomImage({
   const [panel, setPanel] = useState<PanelBox | null>(null)
   /** Same value as `panel`, readable from the rAF callback without a stale closure. */
   const panelRef = useRef<PanelBox | null>(null)
+  /** The photo frame's viewport rect, captured once per hover alongside `panelRef`. */
+  const frameRectRef = useRef<DOMRect | null>(null)
   /**
    * Falls back to the untouched original if the `large` derivative is missing.
    *
@@ -180,11 +182,20 @@ export function ZoomImage({
     }
   }, [zoom])
 
-  /** Pointer position as a 0..1 fraction of the frame, from the rect captured on enter. */
+  /**
+   * Pointer position as a 0..1 fraction of the frame, against the rect captured on enter.
+   *
+   * The rect is cached rather than measured per event for two reasons. It is a forced
+   * synchronous layout read, and `pointermove` fires up to ~120 times a second on a
+   * high-rate mouse -- the rAF gate below throttles the style *write*, not this. And
+   * `panelRef` freezes the frame's size at pointerenter, so measuring live here would
+   * divide by one number while the panel scales by another: any reflow that resizes the
+   * frame without firing scroll or resize would leave the lens and the magnified crop
+   * pointing at different parts of the photo.
+   */
   const trackPointer = (clientX: number, clientY: number) => {
-    const frame = frameRef.current
-    if (!frame) return
-    const rect = frame.getBoundingClientRect()
+    const rect = frameRectRef.current
+    if (!rect) return
     pendingRef.current = {
       x: clamp((clientX - rect.left) / rect.width, 0, 1),
       y: clamp((clientY - rect.top) / rect.height, 0, 1),
@@ -200,6 +211,8 @@ export function ZoomImage({
 
   const onPointerEnter = (event: React.PointerEvent<HTMLDivElement>) => {
     if (!canHover) return
+    const frame = frameRef.current
+    if (!frame) return
     const box = measurePanel()
     if (!box) return
 
@@ -208,8 +221,12 @@ export function ZoomImage({
     preload.onerror = () => setLargeFailed(true)
     preload.src = zoomSrc
 
-    trackPointer(event.clientX, event.clientY)
+    // Capture the rect once, here, and hand it to every pointermove for this hover. It
+    // is the same measurement `measurePanel` just took, so the lens and the panel crop
+    // are guaranteed to agree.
+    frameRectRef.current = frame.getBoundingClientRect()
     panelRef.current = box
+    trackPointer(event.clientX, event.clientY)
     setPanel(box)
     setZoomed(true)
   }
@@ -218,6 +235,7 @@ export function ZoomImage({
     setZoomed(false)
     setPanel(null)
     panelRef.current = null
+    frameRectRef.current = null
     pendingRef.current = null
   }, [])
 

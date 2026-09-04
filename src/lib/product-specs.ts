@@ -74,12 +74,20 @@ export function getGsmLabelShort(product: ProductWithRelations): string | null {
   return `${Math.round(gsm)} g · ${gsmToOunces(gsm).toFixed(1)} oz`
 }
 
-/** Width in inches as text, without the inch mark. */
+/**
+ * Width in inches as text, always WITHOUT the unit -- callers append the inch mark.
+ *
+ * The legacy attribute text sometimes carries its own unit (`71''`, `56 Inches`), and
+ * appending a second one produces `71''"`. That is the same class of bug as the old
+ * "301 GSM GSM g/m²", so it is stripped here rather than in each of the three callers.
+ */
 export function getWidth(product: ProductWithRelations): string | null {
   if (product.width_inches != null) return String(product.width_inches)
-  return (
+  const raw =
     getAttributeValue(product, 'width-inches') ?? getAttributeValue(product, 'width')
-  )
+  if (!raw) return null
+  const stripped = raw.replace(/\s*(?:''|["”″]|in(?:ch(?:es)?)?)\s*$/i, '').trim()
+  return stripped || raw
 }
 
 export function getComposition(product: ProductWithRelations): string | null {
@@ -100,12 +108,17 @@ export function getComposition(product: ProductWithRelations): string | null {
  */
 export function getWeaveOrKnit(product: ProductWithRelations): string | null {
   const facets = product.spec_facets ?? {}
-  const fromFacets = facets.weave ?? facets.knit_type
-  if (fromFacets) return fromFacets
+  // Both, when a mill supplied both. No product does today, but the detail page
+  // suppresses the `weave` and `knit-type` slugs from its catch-all attribute loop, so
+  // returning only the first would silently drop the other from the page.
+  const fromFacets = [facets.weave, facets.knit_type].filter(Boolean)
+  if (fromFacets.length) return fromFacets.join(' · ')
 
-  const fromAttrs =
-    getAttributeValue(product, 'weave') ?? getAttributeValue(product, 'knit-type')
-  if (fromAttrs) return fromAttrs
+  const fromAttrs = [
+    getAttributeValue(product, 'weave'),
+    getAttributeValue(product, 'knit-type'),
+  ].filter(Boolean)
+  if (fromAttrs.length) return fromAttrs.join(' · ')
 
   const construction = getAttributeValue(product, 'construction')
   return isPlaceholderConstruction(construction) ? null : construction
@@ -125,16 +138,26 @@ export function getConstruction(product: ProductWithRelations): string | null {
 }
 
 export function getPattern(product: ProductWithRelations): string | null {
-  return (
-    product.spec_facets?.pattern ??
-    getAttributeValue(product, 'solid-pattern-print') ??
-    getAttributeValue(product, 'pattern')
-  )
+  if (product.spec_facets?.pattern) return product.spec_facets.pattern
+  // Both slugs, for the same reason as getWeaveOrKnit: the detail page suppresses both
+  // from its catch-all loop, so returning only the first would drop the other.
+  const fromAttrs = [
+    getAttributeValue(product, 'solid-pattern-print'),
+    getAttributeValue(product, 'pattern'),
+  ].filter(Boolean)
+  return fromAttrs.length ? fromAttrs.join(' · ') : null
 }
 
-/** Availability, not fibre type: "Stock", "Made to Order", "Greige Stock". */
+/**
+ * Availability, not fibre type: "Stock", "Made to Order", "Greige Stock".
+ *
+ * Falls back to the `type` attribute because the detail page suppresses that slug from
+ * its catch-all loop. `spec_facets` is projected by a trigger that only reads
+ * `value_text`, so a row whose `type` landed in `value_number`, or that predates the
+ * trigger, would otherwise lose the line entirely rather than falling through.
+ */
 export function getAvailability(product: ProductWithRelations): string | null {
-  return product.spec_facets?.type ?? null
+  return product.spec_facets?.type ?? getAttributeValue(product, 'type')
 }
 
 /**

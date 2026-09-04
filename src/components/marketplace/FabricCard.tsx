@@ -338,13 +338,23 @@ function FabricCardComponent({
             * none, and there the whole card should simply navigate.
             */}
           {onOpenQuickView && (
-            <button
-              type="button"
+            <Link
+              to={`/fabric/${product.slug}`}
+              target="_blank"
+              rel="noopener noreferrer"
               onClick={(event) => {
+                // A real link, not a button, because this overlay covers ~90% of the card
+                // and a button would swallow every ⌘/Ctrl-click, middle-click and
+                // "Open link in new tab" over the photo -- the exact multi-tab compare
+                // workflow the rest of this card is built around. A plain left click is
+                // intercepted for the quick view; anything with a modifier is left to the
+                // browser, which does what the user asked for.
+                if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
                 event.preventDefault()
                 event.stopPropagation()
                 onOpenQuickView(product)
               }}
+              // Middle-click never fires onClick, so it opens the tab on its own.
               aria-label={`Quick view — ${product.title}`}
               className="absolute inset-0 z-20 cursor-zoom-in focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent"
             >
@@ -357,7 +367,7 @@ function FabricCardComponent({
               >
                 Quick view
               </span>
-            </button>
+            </Link>
           )}
           {/* Color swatch overlay */}
           {product.color_hex && (

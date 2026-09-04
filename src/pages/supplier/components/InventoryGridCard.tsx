@@ -38,21 +38,19 @@ export function InventoryGridCard({ product, onEdit }: InventoryGridCardProps) {
 
   return (
     <div
-      role="button"
-      tabIndex={0}
-      onClick={() => onEdit(product)}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter' || event.key === ' ') {
-          event.preventDefault()
-          onEdit(product)
-        }
-      }}
-      aria-label={`Edit ${product.title}`}
+      // A plain container, not role="button". It used to be a keyboard-activatable
+      // wrapper around the "view live listing" anchor, which is invalid interactive
+      // nesting and, worse, trapped the link: tabbing to it and pressing Enter bubbled
+      // to the wrapper's keydown, which called preventDefault and opened the editor
+      // instead. The link was unreachable by keyboard entirely. The card now follows the
+      // same pattern as the marketplace card -- a stretched control underneath, real
+      // controls above it -- so both are ordinary focusable elements.
+      //
       // @container for the same reason as the marketplace card: this grid runs up to four
       // columns, so card width and viewport width are only loosely related and the title
       // has to size itself against the card. Short SKU-style titles never hit it, but a
       // supplier who names fabrics in prose would.
-      className="group @container clip-corner relative flex flex-col bg-card text-left transition-transform duration-200 hover:-translate-y-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      className="group @container clip-corner relative flex flex-col bg-card text-left transition-transform duration-200 focus-within:ring-2 focus-within:ring-accent hover:-translate-y-1"
     >
       <div className="shrink-0 px-4 pb-1 pt-4">
         <div className="flex items-start justify-between gap-2">
@@ -114,10 +112,9 @@ export function InventoryGridCard({ product, onEdit }: InventoryGridCardProps) {
           to={`/fabric/${product.slug}`}
           target="_blank"
           rel="noopener noreferrer"
-          onClick={(event) => event.stopPropagation()}
           title="View live listing"
-          aria-label={`View ${product.title} on the marketplace`}
-          className="absolute bottom-2 right-2 grid h-7 w-7 place-items-center bg-[#2C1A0E]/85 text-[#F5EDE4] opacity-0 transition-opacity duration-200 hover:bg-[#2C1A0E] group-hover:opacity-100 focus:opacity-100"
+          aria-label={`View ${product.title} on the marketplace — opens in a new tab`}
+          className="absolute bottom-2 right-2 z-20 grid h-7 w-7 place-items-center bg-[#2C1A0E]/85 text-[#F5EDE4] opacity-0 transition-opacity duration-200 hover:bg-[#2C1A0E] focus-visible:opacity-100 group-hover:opacity-100"
         >
           <ExternalLink className="h-3.5 w-3.5" />
         </Link>
@@ -147,6 +144,16 @@ export function InventoryGridCard({ product, onEdit }: InventoryGridCardProps) {
           </span>
         </div>
       </div>
+
+      {/* Stretched edit control: covers the card, sits beneath the "view live" link
+          (z-20) so that link is both clickable and tabbable. A real <button>, so Enter
+          and Space come from the browser rather than a hand-rolled keydown handler. */}
+      <button
+        type="button"
+        onClick={() => onEdit(product)}
+        aria-label={`Edit ${product.title}`}
+        className="absolute inset-0 z-10 focus:outline-none"
+      />
     </div>
   )
 }

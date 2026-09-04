@@ -165,6 +165,11 @@ export default function SupplierInventoryPage() {
                 <div className="flex items-start gap-4">
                   <Link
                     to={`/fabric/${product.slug}`}
+                    // Matches the grid card's "view live listing" button: checking the
+                    // public page should not throw away half-typed edits on this one.
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={`View ${product.title} on the marketplace — opens in a new tab`}
                     className="clip-corner-sm block h-14 w-14 shrink-0 overflow-hidden bg-elevated"
                   >
                     {product.images?.[0] && (

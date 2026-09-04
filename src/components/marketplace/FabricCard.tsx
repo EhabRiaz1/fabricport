@@ -54,6 +54,10 @@ function CompactCard({ product, currency = 'PKR', unit = 'meters', fxRate = 278,
   return (
     <Link
       to={`/fabric/${product.slug}`}
+      // Same new-tab rule as the grid card, so the two variants cannot disagree.
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label={`${product.title} — opens in a new tab`}
       className={cn(
         'group flex items-center gap-4 border-b border-border py-4 transition-colors hover:bg-surface/50',
         className,
@@ -428,11 +432,21 @@ function FabricCardComponent({
           )}
         </div>
 
-        {/* Stretched navigation link — covers the whole card, sits beneath the
-            wishlist heart and any inline action buttons (z-20). */}
+        {/*
+          * Stretched navigation link — covers the whole card, sits beneath the wishlist
+          * heart, the quick-view photo button and any inline actions (z-20+).
+          *
+          * Opens in a new tab. Browsing a fabric catalogue is a compare-many exercise: the
+          * grid, its filters and its scroll position are expensive to rebuild, and losing
+          * them to every product you want a closer look at is the thing that made people
+          * stop opening products at all. The quick-view modal's own button does the same,
+          * so a card and its modal behave identically.
+          */}
         <Link
           to={`/fabric/${product.slug}`}
-          aria-label={product.title}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label={`${product.title} — opens in a new tab`}
           className="absolute inset-0 z-10"
         />
       </div>

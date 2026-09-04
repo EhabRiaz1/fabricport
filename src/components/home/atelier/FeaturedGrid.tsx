@@ -111,6 +111,10 @@ export function FeaturedGrid({ products }: FeaturedGridProps) {
               <Link
                 key={product.id}
                 to={`/fabric/${product.slug}`}
+                // Product tiles open in a new tab everywhere, so the homepage, the
+                // marketplace grid and the quick-view modal all behave the same.
+                target="_blank"
+                rel="noopener noreferrer"
                 data-feature-tile
                 className={cn(
                   'group relative block overflow-hidden clip-corner bg-elevated',

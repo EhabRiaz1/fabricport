@@ -288,6 +288,9 @@ export function MaterialStrip({ products }: MaterialStripProps) {
                 <Link
                   key={product.id}
                   to={`/fabric/${product.slug}`}
+                  // Same new-tab rule as every other product tile.
+                  target="_blank"
+                  rel="noopener noreferrer"
                   data-rack-tile
                   className="group relative block w-[68vw] shrink-0 sm:w-[44vw] lg:w-[30vw]"
                 >

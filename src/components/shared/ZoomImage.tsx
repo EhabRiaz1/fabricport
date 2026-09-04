@@ -246,7 +246,14 @@ export function ZoomImage({
         onPointerEnter={onPointerEnter}
         onPointerLeave={closePanel}
         onPointerMove={onPointerMove}
-        onClick={onOpenViewer}
+        onClick={() => {
+          // The fullscreen viewer is a z-50 sheet and the panel is z-60, so it has to go
+          // before the viewer arrives. Radix's scroll lock happens to fire pointerleave
+          // here, but relying on that would leave the panel floating over the viewer the
+          // day that changes.
+          closePanel()
+          onOpenViewer?.()
+        }}
         onKeyDown={(event) => {
           if (!onOpenViewer) return
           if (event.key === 'Enter' || event.key === ' ') {

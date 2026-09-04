@@ -1,6 +1,7 @@
 import { memo, useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Link } from 'react-router-dom'
+import { Box } from 'lucide-react'
 import {
   cn,
   formatPrice,
@@ -8,20 +9,16 @@ import {
   metersToYards,
 } from '@/lib/utils'
 import type { ProductImageVariant } from '@/lib/product-images'
+import {
+  getComposition,
+  getFabricType,
+  getGsmLabelShort,
+  getWeaveOrKnit,
+  getWidth,
+} from '@/lib/product-specs'
 import { convertPrice } from '@/lib/fx'
 import { WishlistButton } from '@/components/marketplace/WishlistButton'
 import type { FabricCardProps } from '@/types/app'
-
-function getAttributeValue(
-  product: FabricCardProps['product'],
-  slug: string,
-): string | null {
-  const match = product.attributes?.find((attr) => attr.attribute?.slug === slug)
-  if (!match) return null
-  if (match.value_text) return match.value_text
-  if (match.value_number != null) return String(match.value_number)
-  return null
-}
 
 function formatProductPrice(
   product: FabricCardProps['product'],
@@ -170,6 +167,7 @@ function FabricCardComponent({
   onAddToCart,
   className,
   imagePriority = false,
+  onOpenQuickView,
 }: FabricCardProps) {
   const isFeatured = variant === 'featured'
   const isGrid = variant === 'grid'
@@ -181,22 +179,19 @@ function FabricCardComponent({
 
   const priceValue = formatProductPrice(product, currency, fxRate)
   const unitSuffix = unit === 'yards' ? '/yd' : '/m'
-  // Prefer the real spec columns (backfilled); fall back to legacy EAV attributes.
-  const gsm = product.gsm != null
-    ? String(product.gsm)
-    : getAttributeValue(product, 'weight-before-wash')
-      ?? getAttributeValue(product, 'gsm')
-      ?? getAttributeValue(product, 'weight')
-  const width = product.width_inches != null
-    ? String(product.width_inches)
-    : getAttributeValue(product, 'width-inches')
-      ?? getAttributeValue(product, 'width')
-  const composition = product.composition
-    ?? getAttributeValue(product, 'fabric-content')
-    ?? getAttributeValue(product, 'composition')
+  // All spec reads go through lib/product-specs so the card, the quick-view modal and the
+  // detail page cannot drift apart on fallback order again.
+  const gsm = getGsmLabelShort(product)
+  const width = getWidth(product)
+  const composition = getComposition(product)
+  const weave = getWeaveOrKnit(product)
+  const fabricType = getFabricType(product)
+  const hasDigitalFabric = (product.scan_files?.length ?? 0) > 0
   const stock = unit === 'yards'
     ? `${metersToYards(product.stock_meters).toFixed(0)} yd`
     : `${product.stock_meters.toFixed(0)} m`
+  // "Knit · Organic Cotton 100%" — the legacy card's category + composition line.
+  const typeAndComposition = [fabricType, composition].filter(Boolean).join(' · ')
 
   // Grid cards used to be `aspect-square` with the image box as the only flexible
   // row, so the image height was (square - header - specs). A 2-line title or a
@@ -218,16 +213,34 @@ function FabricCardComponent({
       <div className="flex h-full min-h-0 flex-col">
         {/* Header */}
         <div className={cn('shrink-0', isGrid ? 'px-4 pb-1 pt-4' : 'px-5 pb-2 pt-5')}>
-          <h3
-            className={cn(
-              'font-display font-semibold leading-tight text-text-dark transition-colors group-hover:text-accent line-clamp-2',
-              isFeatured ? 'text-lg' : isGrid ? 'text-sm sm:text-base' : 'text-sm',
-              // Reserve two lines whether the title wraps or not.
-              isGrid && 'h-[2.1875rem] sm:h-[2.5rem]',
-            )}
-          >
-            {product.title}
-          </h3>
+          {/* Stock sits beside the name rather than in the spec grid: it is the number
+              buyers scan for first, and the legacy card badged it over the photo. */}
+          <div className="flex items-start justify-between gap-2">
+            <h3
+              className={cn(
+                'min-w-0 flex-1 font-display font-semibold text-text-dark transition-colors group-hover:text-accent line-clamp-2',
+                // The `/[1.2]` modifier sets font-size and line-height in one declaration.
+                // Plain `leading-tight` loses to the line-height that Tailwind's `text-base`
+                // ships with, which made a wrapped title 48px tall inside a 40px box and
+                // pushed its second line over the supplier name.
+                isFeatured
+                  ? 'text-lg/[1.2]'
+                  : isGrid
+                    ? 'text-sm/[1.2] sm:text-base/[1.2]'
+                    : 'text-sm/[1.2]',
+                // Reserve two lines whether the title wraps or not.
+                isGrid && 'h-[2.1rem] sm:h-[2.4rem]',
+              )}
+            >
+              {product.title}
+            </h3>
+            <span
+              className="mt-0.5 shrink-0 border border-[#C8C4BC] bg-[#F0ECE4] px-1.5 py-0.5 font-mono text-[9px] tabular-nums tracking-wide text-text-dark-secondary"
+              title={`${product.stock_meters.toFixed(0)} meters in stock`}
+            >
+              {stock}
+            </span>
+          </div>
           {/* In grid the element is always rendered so a supplier-less product does
               not gift its row height to the image. */}
           {(product.supplier || isGrid) && (
@@ -272,18 +285,55 @@ function FabricCardComponent({
               </span>
             </div>
           )}
+          {/*
+            * The photo is its own control, above the card's stretched navigation link, so a
+            * click on it opens the quick-view modal instead of leaving the grid. Only wired
+            * up when a handler is supplied -- the detail page's related-fabric strip has
+            * none, and there the whole card should simply navigate.
+            */}
+          {onOpenQuickView && (
+            <button
+              type="button"
+              onClick={(event) => {
+                event.preventDefault()
+                event.stopPropagation()
+                onOpenQuickView(product)
+              }}
+              aria-label={`Quick view — ${product.title}`}
+              className="absolute inset-0 z-20 cursor-zoom-in focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent"
+            >
+              {/* Centred rather than a bottom bar: the bottom edge already carries the
+                  colour swatch and the wishlist heart, and a full-width strip sat on top
+                  of the heart. */}
+              <span
+                aria-hidden
+                className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 whitespace-nowrap bg-[#140A04]/85 px-3 py-1.5 font-mono text-[8px] uppercase tracking-[0.18em] text-[#F5EDE4] opacity-0 transition-opacity duration-200 group-hover:opacity-100"
+              >
+                Quick view
+              </span>
+            </button>
+          )}
           {/* Color swatch overlay */}
           {product.color_hex && (
             <span
-              className="absolute bottom-2 left-2 h-5 w-5 border border-card shadow-sm"
+              className="pointer-events-none absolute bottom-2 left-2 z-30 h-5 w-5 border border-card shadow-sm"
               style={{ backgroundColor: product.color_hex }}
               title={product.color_display_name ?? undefined}
             />
           )}
+          {hasDigitalFabric && (
+            <span
+              className="pointer-events-none absolute left-2 top-2 z-30 flex items-center gap-1 bg-[#2C1A0E]/85 px-1.5 py-0.5 font-mono text-[8px] uppercase tracking-[0.16em] text-[#F5EDE4]"
+              title="A CLO / Marvelous Designer .zfab file is available for this fabric"
+            >
+              <Box className="h-2.5 w-2.5" />
+              ZFAB
+            </span>
+          )}
           {/* Wishlist heart mirrors the swatch at the bottom-right of the image */}
           <WishlistButton
             productId={product.id}
-            className="absolute bottom-2 right-2 z-20"
+            className="absolute bottom-2 right-2 z-30"
           />
         </div>
 
@@ -296,7 +346,10 @@ function FabricCardComponent({
               <p className="font-mono text-[7px] font-semibold uppercase tracking-[0.18em] text-text-dark sm:text-[8px]">
                 GSM
               </p>
-              <p className="mt-0.5 truncate font-mono text-[10px] text-text-dark-secondary sm:text-xs">
+              {/* Held at 10px at every breakpoint: "340 g · 10.0 oz" is 15 characters and
+                  the cell is ~104px, which at the 12px the other cells use truncates the
+                  ounces off exactly the fabrics that are heavy enough to care. */}
+              <p className="mt-0.5 truncate font-mono text-[10px] text-text-dark-secondary">
                 {gsm ?? '—'}
               </p>
             </div>
@@ -323,13 +376,26 @@ function FabricCardComponent({
             </div>
             <div className={cn(isGrid ? 'px-3 py-2' : 'px-5 py-3')}>
               <p className="font-mono text-[7px] font-semibold uppercase tracking-[0.18em] text-text-dark sm:text-[8px]">
-                STOCK
+                WEAVE
               </p>
               <p className="mt-0.5 truncate font-mono text-[10px] text-text-dark-secondary sm:text-xs">
-                {stock}
+                {weave ?? '—'}
               </p>
             </div>
           </div>
+
+          {/* Fabric type + composition, as the legacy card printed them. Fixed height in
+              grid so a two-word composition and a twenty-word one give the same card. */}
+          {isGrid && (
+            <>
+              <div className="h-px bg-[#C8C4BC]" />
+              <div className="px-3 py-2">
+                <p className="h-[14px] truncate font-mono text-[10px] leading-[14px] text-text-dark-secondary">
+                  {typeAndComposition || '—'}
+                </p>
+              </div>
+            </>
+          )}
 
           {!isGrid && (
             <>
@@ -340,7 +406,7 @@ function FabricCardComponent({
                     CONTENT
                   </p>
                   <p className="mt-0.5 font-mono text-xs leading-tight text-text-dark-secondary line-clamp-1">
-                    {composition ?? '—'}
+                    {typeAndComposition || '—'}
                   </p>
                 </div>
               </div>

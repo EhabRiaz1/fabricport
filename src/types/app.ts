@@ -51,6 +51,12 @@ export interface FabricCardProps {
   className?: string
   /** Eager-load grid thumbnail (first page above the fold). */
   imagePriority?: boolean
+  /**
+   * Clicking the photo opens a quick-view modal instead of navigating. Omit it and the
+   * photo falls through to the card's stretched link, which is what the detail page's
+   * "more from this mill" strip wants.
+   */
+  onOpenQuickView?: (product: ProductWithRelations) => void
 }
 
 export type MarketplaceSort = 'newest' | 'price_asc' | 'price_desc'

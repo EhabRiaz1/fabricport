@@ -1,4 +1,4 @@
-import { ChevronDown } from 'lucide-react'
+import { Check, ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { COLOR_FAMILIES, type ColorFamily } from '@/lib/color/classify'
 import { COLOR_SWATCH_HEX } from '@/lib/color/swatches'
@@ -88,7 +88,7 @@ export function FilterPanel({
           <button
             type="button"
             onClick={onClearAll}
-            className="font-mono text-[10px] uppercase tracking-[0.18em] text-[#E8593C] transition-opacity hover:opacity-70"
+            className="border border-transparent px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.18em] text-[#E8593C] transition-colors hover:border-[#E8593C] hover:bg-[#E8593C]/10 focus:outline-none focus-visible:ring-1 focus-visible:ring-[#E8593C]"
           >
             Clear {activeCount}
           </button>
@@ -130,10 +130,12 @@ export function FilterPanel({
                 onClick={() => onToggleColor(family)}
                 aria-pressed={active}
                 className={cn(
-                  'flex items-center gap-2 border px-2 py-1.5 text-left transition-colors',
+                  'flex items-center gap-2 border px-2 py-1.5 text-left transition-all duration-150',
+                  'focus:outline-none focus-visible:ring-1 focus-visible:ring-[#E8593C]',
+                  'active:scale-[0.97]',
                   active
-                    ? 'border-[#E8593C] bg-[#E8593C]/8'
-                    : 'border-[#C8C4BC] hover:border-[#9C8870]',
+                    ? 'border-[#E8593C] bg-[#E8593C]/10 font-medium ring-1 ring-[#E8593C]/40'
+                    : 'border-[#C8C4BC] hover:border-[#9C8870] hover:bg-[#2C1A0E]/[0.04]',
                 )}
               >
                 <span
@@ -144,6 +146,9 @@ export function FilterPanel({
                 <span className="truncate font-mono text-[9px] uppercase tracking-[0.12em]">
                   {family}
                 </span>
+                {active && (
+                  <Check aria-hidden className="ml-auto h-3 w-3 shrink-0 text-[#E8593C]" />
+                )}
               </button>
             )
           })}
@@ -277,7 +282,7 @@ function FacetGroup({
     <details open={open} className="group">
       {/* The sheet moves focus to the first focusable element on open, which lands here.
           The browser default is a loud blue ring, so use the accent hairline instead. */}
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-2 border-b border-[#C8C4BC] pb-2 outline-none focus-visible:border-[#E8593C] [&::-webkit-details-marker]:hidden">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-2 border-b border-[#C8C4BC] px-1 pb-2 pt-1 outline-none transition-colors hover:border-[#9C8870] hover:bg-[#2C1A0E]/[0.035] focus-visible:border-[#E8593C] [&::-webkit-details-marker]:hidden">
         <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-[#3C2A1A]">
           {label}
         </span>
@@ -293,6 +298,15 @@ function FacetGroup({
   )
 }
 
+/**
+ * One option in a facet group.
+ *
+ * The rows used to change nothing but their text colour on hover, which — with Tailwind v4
+ * no longer giving buttons a pointer cursor — read as static text rather than as controls.
+ * They now get a tinted band, an accent bar on the left that slides in on hover and stays
+ * put once selected, and a press state, so both "you can click this" and "this one is on"
+ * are legible without reading the colour.
+ */
 function FacetRow({
   label,
   count,
@@ -311,13 +325,29 @@ function FacetRow({
         onClick={onSelect}
         aria-pressed={selected}
         className={cn(
-          'flex w-full items-center justify-between gap-3 py-1.5 text-left text-[13px] transition-colors',
-          selected ? 'text-[#E8593C]' : 'text-[#3C2A1A] hover:text-[#2C1A0E]',
+          'group/row relative flex w-full items-center justify-between gap-3 py-1.5 pl-3 pr-2 text-left text-[13px] transition-colors',
+          'focus:outline-none focus-visible:ring-1 focus-visible:ring-[#E8593C]',
+          'active:bg-[#2C1A0E]/[0.07]',
+          selected
+            ? 'bg-[#E8593C]/[0.07] font-medium text-[#E8593C]'
+            : 'text-[#3C2A1A] hover:bg-[#2C1A0E]/[0.045] hover:text-[#2C1A0E]',
         )}
       >
+        <span
+          aria-hidden
+          className={cn(
+            'absolute left-0 top-1/2 w-[2px] -translate-y-1/2 bg-[#E8593C] transition-all duration-150',
+            selected ? 'h-full' : 'h-0 group-hover/row:h-3/5',
+          )}
+        />
         <span className="truncate">{label}</span>
         {count != null && (
-          <span className="shrink-0 font-mono text-[9px] tabular-nums text-[#9C8870]">
+          <span
+            className={cn(
+              'shrink-0 font-mono text-[9px] tabular-nums transition-colors',
+              selected ? 'text-[#E8593C]' : 'text-[#9C8870] group-hover/row:text-[#3C2A1A]',
+            )}
+          >
             {count}
           </span>
         )}

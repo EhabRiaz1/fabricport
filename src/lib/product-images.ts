@@ -62,3 +62,25 @@ export function getProductImageUrl(path: string, options?: ProductImageOptions):
   const variant = options?.variant ?? 'original'
   return getProductImagePublicUrl(getProductImageStoragePath(path, variant))
 }
+
+/**
+ * Public URL for a `.zfab` digital fabric in the `digital-fabrics` bucket.
+ *
+ * Stored on `products.scan_files` as `<productId>/<filename>.zfab`. An absolute URL is
+ * passed through untouched so a product can point at an external host without a migration.
+ */
+export function getDigitalFabricUrl(path: string): string {
+  if (path.startsWith('http')) return path
+  const base = import.meta.env.VITE_SUPABASE_URL
+  return `${base}/storage/v1/object/public/digital-fabrics/${path}`
+}
+
+/** Filename shown on the download button. */
+export function getDigitalFabricName(path: string): string {
+  const last = path.split('/').pop() ?? path
+  try {
+    return decodeURIComponent(last)
+  } catch {
+    return last
+  }
+}

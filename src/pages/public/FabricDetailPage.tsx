@@ -1,6 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { ChevronRight, Palette as Swatch, Play, Send, ShoppingBag } from 'lucide-react'
+import {
+  Box,
+  ChevronRight,
+  Download,
+  Palette as Swatch,
+  Play,
+  Send,
+  ShoppingBag,
+} from 'lucide-react'
 import { PublicNav } from '@/components/layout/PublicNav'
 import { Footer } from '@/components/layout/Footer'
 import { FabricCard } from '@/components/marketplace/FabricCard'
@@ -24,26 +32,28 @@ import { trackSupplierView, usePagePresence } from '@/lib/track'
 import {
   cn,
   formatPrice,
+  getDigitalFabricName,
+  getDigitalFabricUrl,
   getProductImageUrl,
   metersToYards,
 } from '@/lib/utils'
+import {
+  getAvailability,
+  getComposition,
+  getConstruction,
+  getFabricType,
+  getGsmLabel,
+  getPattern,
+  getWeaveOrKnit,
+  getWidth,
+  PROMOTED_ATTRIBUTE_SLUGS,
+} from '@/lib/product-specs'
 import { usePreferencesStore } from '@/stores/preferences'
 import { useCartStore } from '@/stores/cart'
 import { useCartUI } from '@/lib/cart'
 import { useChatDock } from '@/lib/chat-dock'
 import { toast } from '@/stores/toast'
 import type { ProductSpecRow } from '@/types/app'
-
-function getAttributeValue(
-  product: NonNullable<ReturnType<typeof useProduct>['product']>,
-  slug: string,
-): string | null {
-  const match = product.attributes?.find((attr) => attr.attribute?.slug === slug)
-  if (!match) return null
-  if (match.value_text) return match.value_text
-  if (match.value_number != null) return String(match.value_number)
-  return null
-}
 
 export default function FabricDetailPage() {
   const { slug } = useParams<{ slug: string }>()
@@ -148,47 +158,42 @@ export default function FabricDetailPage() {
         : `${product.stock_meters.toFixed(0)} meters`
 
     /*
-     * Prefer the promoted columns over the attribute table.
+     * Every read goes through lib/product-specs, which prefers the promoted columns
+     * (`gsm`, `width_inches`, `composition`, `spec_facets`) and falls back to the legacy
+     * attribute table. Those attribute values are free text that may already carry a unit
+     * ("301 GSM"), which is how "301 GSM GSM g/m²" happened -- so the helper prints them
+     * as-is rather than appending a second unit.
      *
-     * gsm / width_inches / composition are now populated for every product and are plain
-     * numbers, so the page can format them itself. The attribute values are free text that
-     * may already carry a unit ("301 GSM"), which is how "301 GSM GSM g/m²" happened -- so
-     * when falling back to them, print them as-is rather than appending a second unit.
+     * GSM shows both units ("185 g/m² · 5.45 oz"). The legacy site printed
+     * "185 GSM | 5.45 Oz" and mills outside South Asia quote in ounces.
      */
-    const gsmText =
-      product.gsm != null
-        ? `${product.gsm} g/m²`
-        : (getAttributeValue(product, 'weight-before-wash') ??
-           getAttributeValue(product, 'gsm') ??
-           getAttributeValue(product, 'weight'))
-    const widthText =
-      product.width_inches != null
-        ? `${product.width_inches}"`
-        : (getAttributeValue(product, 'width-inches') ?? getAttributeValue(product, 'width'))
-    const composition =
-      product.composition ??
-      getAttributeValue(product, 'fabric-content') ??
-      getAttributeValue(product, 'composition') ??
-      getAttributeValue(product, 'content')
+    const widthText = getWidth(product)
 
     const rows: ProductSpecRow[] = [
-      { label: 'GSM', value: gsmText ?? '—' },
-      { label: 'WIDTH', value: widthText ?? '—' },
-      { label: 'COMPOSITION', value: composition ?? '—' },
-      { label: 'CATEGORY', value: product.category?.name ?? '—' },
+      { label: 'GSM', value: getGsmLabel(product) ?? '—' },
+      { label: 'WIDTH', value: widthText ? `${widthText}"` : '—' },
+      { label: 'COMPOSITION', value: getComposition(product) ?? '—' },
+      { label: 'CATEGORY', value: getFabricType(product) ?? '—' },
+      { label: 'WEAVE / KNIT', value: getWeaveOrKnit(product) ?? '—' },
       { label: 'STOCK', value: stock },
       { label: 'MOQ', value: product.moq_meters ? `${product.moq_meters} m` : '—' },
       { label: 'LEAD TIME', value: product.lead_time_days ? `${product.lead_time_days} days` : '—' },
       { label: 'PRICE', value: price },
     ]
 
-    // Surface every remaining technical attribute the mill provided.
-    const shownSlugs = new Set([
-      'weight-before-wash', 'gsm', 'weight', 'width-inches', 'width',
-      'fabric-content', 'composition', 'content',
-    ])
+    // Optional rows, only when the mill provided them. Construction in particular is
+    // "0x00x0" for 366 of the imported products, which the helper reports as absent.
+    const pattern = getPattern(product)
+    if (pattern) rows.push({ label: 'PATTERN', value: pattern })
+    const construction = getConstruction(product)
+    if (construction) rows.push({ label: 'CONSTRUCTION', value: construction })
+    const availability = getAvailability(product)
+    if (availability) rows.push({ label: 'AVAILABILITY', value: availability })
+
+    // Surface every remaining technical attribute the mill provided -- finishes,
+    // elongation, growth, recommended use.
     for (const attr of product.attributes ?? []) {
-      if (!attr.attribute || shownSlugs.has(attr.attribute.slug)) continue
+      if (!attr.attribute || PROMOTED_ATTRIBUTE_SLUGS.has(attr.attribute.slug)) continue
       const value =
         attr.value_text ?? (attr.value_number != null ? String(attr.value_number) : null)
       if (!value) continue
@@ -197,6 +202,9 @@ export default function FabricDetailPage() {
 
     return rows
   }, [product, currency, unit, fxRate])
+
+  /** Mirrored from the legacy site's "Download Digital Fabric File"; null for most rows. */
+  const digitalFabric = product?.scan_files?.[0] ?? null
 
   // The input is a bare <input> outside a <form>, so its `min` is never enforced.
   // Clamp here instead of trusting the field.
@@ -392,6 +400,18 @@ export default function FabricDetailPage() {
               />
             </div>
 
+            {/* The zoom affordance sits under the photo rather than on it — the magnifier
+                chip used to cover the weave you were trying to read. Hidden on coarse
+                pointers, where the panel never opens and a tap goes fullscreen instead.
+                The underscores in the media variant are how Tailwind spells spaces inside
+                an arbitrary variant; `and` without them is invalid CSS and the rule
+                silently never applies. */}
+            {images[activeImage] && !showVideo && (
+              <p className="mt-2 hidden font-mono text-[9px] uppercase tracking-[0.22em] text-text-muted lg:[@media(hover:hover)_and_(pointer:fine)]:block">
+                Hover to zoom · click for full size
+              </p>
+            )}
+
             {(images.length > 1 || product.video_url) && (
               <div className="mt-4 grid grid-cols-4 gap-3">
                 {product.video_url && (
@@ -586,6 +606,32 @@ export default function FabricDetailPage() {
                     : 'A physical swatch posted to your address. No minimum.'}
                 </p>
               </div>
+
+              {/*
+                * The digital counterpart to the physical swatch: a .zfab a designer drops
+                * straight into CLO or Marvelous Designer. Carried over from the legacy
+                * site, where it was the one thing our catalogue could not do.
+                *
+                * A plain <a download> rather than a Button: this is a file transfer, and
+                * the browser should treat it as one (right-click "Save link as", middle
+                * click, the download shelf).
+                */}
+              {digitalFabric && (
+                <div className="mt-4 border-t border-border-cream pt-4">
+                  <a
+                    href={getDigitalFabricUrl(digitalFabric)}
+                    download={getDigitalFabricName(digitalFabric)}
+                    className="clip-corner-sm inline-flex min-w-[200px] items-center justify-center gap-2 border border-border-strong px-6 py-2.5 text-sm uppercase tracking-wider text-text-dark transition-colors hover:border-accent hover:text-accent"
+                  >
+                    <Box className="h-4 w-4" />
+                    Download .zfab
+                    <Download className="h-4 w-4" />
+                  </a>
+                  <p className="mt-2 text-xs text-text-dark-secondary">
+                    Digital fabric file. Compatible with CLO 3D and Marvelous Designer.
+                  </p>
+                </div>
+              )}
             </div>
 
           </div>

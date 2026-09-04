@@ -13,9 +13,15 @@ const PRODUCT_SELECT = `
   )
 `
 
-/** Lightweight select for marketplace grid — avoids loading full attribute metadata. */
+/**
+ * Lightweight select for marketplace grid — avoids loading full attribute metadata.
+ *
+ * The category join is not decoration: "type of fabric" on the card (Knit / Woven / Denim)
+ * is the category name. `spec_facets.type` is availability (Stock / Made to Order) and is
+ * a different thing entirely.
+ */
 export const PRODUCT_LIST_SELECT =
-  '*, supplier:suppliers(id, brand_name, slug, is_verified), attributes:product_attributes(value_text, value_number, attribute:fabric_attributes(slug))'
+  '*, supplier:suppliers(id, brand_name, slug, is_verified), category:fabric_categories(id, name, slug), attributes:product_attributes(value_text, value_number, attribute:fabric_attributes(slug))'
 
 export const MARKETPLACE_PAGE_SIZE = 12
 

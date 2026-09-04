@@ -34,6 +34,20 @@
   box-sizing: border-box;
 }
 
+/*
+ * Tailwind v4's preflight dropped v3's `button { cursor: pointer }`, so every button in
+ * the app inherited the browser default arrow and stopped reading as clickable -- most
+ * visibly on the marketplace facet rail, where the rows are plain buttons.
+ * `<summary>` is here for the same reason: the facet groups are native <details>.
+ */
+button:not(:disabled),
+[role='button']:not([aria-disabled='true']),
+summary,
+label:has(> input[type='checkbox']:not(:disabled)),
+label:has(> input[type='radio']:not(:disabled)) {
+  cursor: pointer;
+}
+
 html {
   scroll-behavior: auto;
 }

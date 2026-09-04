@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input'
 import { ArchiveHero } from '@/components/marketplace/ArchiveHero'
 import { ColorSpectrum } from '@/components/marketplace/ColorSpectrum'
 import { FabricCard } from '@/components/marketplace/FabricCard'
+import { FabricQuickView } from '@/components/marketplace/FabricQuickView'
 import { UnitToggle } from '@/components/marketplace/UnitToggle'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useProducts, MARKETPLACE_PAGE_SIZE } from '@/hooks/useProducts'
@@ -23,7 +24,12 @@ import { marketplaceReveal, marketplaceRevealDelayed } from '@/lib/motion'
 import { usePagePresence } from '@/lib/track'
 import { supabase } from '@/lib/supabase'
 import { usePreferencesStore } from '@/stores/preferences'
-import type { FabricFilterOption, MarketplaceFilters, MarketplaceSort } from '@/types/app'
+import type {
+  FabricFilterOption,
+  MarketplaceFilters,
+  MarketplaceSort,
+  ProductWithRelations,
+} from '@/types/app'
 
 const SORT_OPTIONS: { value: MarketplaceSort; label: string }[] = [
   { value: 'newest', label: 'Newest' },
@@ -73,6 +79,8 @@ export default function MarketplacePage() {
     pending: filtersPending,
   } = useMarketplaceFilters()
   const [filterSheetOpen, setFilterSheetOpen] = useState(false)
+  /** The fabric whose photo was clicked. Null closes the quick-view modal. */
+  const [quickViewProduct, setQuickViewProduct] = useState<ProductWithRelations | null>(null)
   const sidebarRef = useRef<HTMLDivElement>(null)
   const [categories, setCategories] = useState<FabricFilterOption[]>([])
   const [facetCounts, setFacetCounts] = useState<{
@@ -320,7 +328,7 @@ export default function MarketplacePage() {
                 <button
                   type="button"
                   onClick={() => setFilterSheetOpen(true)}
-                  className="flex shrink-0 items-center gap-2 border border-[#C8C4BC] px-3 py-2 font-mono text-[10px] uppercase tracking-[0.14em] text-[#3C2A1A] transition-colors hover:border-[#2C1A0E] lg:hidden"
+                  className="flex shrink-0 items-center gap-2 border border-[#C8C4BC] px-3 py-2 font-mono text-[10px] uppercase tracking-[0.14em] text-[#3C2A1A] transition-colors hover:border-[#2C1A0E] hover:bg-[#2C1A0E]/[0.05] focus:outline-none focus-visible:ring-1 focus-visible:ring-[#E8593C] active:bg-[#2C1A0E]/[0.1] lg:hidden"
                 >
                   <SlidersHorizontal className="h-3.5 w-3.5" />
                   Filters
@@ -375,11 +383,13 @@ export default function MarketplacePage() {
                       onClick={() =>
                         patch({ sort: option.value === 'newest' ? undefined : option.value })
                       }
+                      aria-pressed={(filters.sort ?? 'newest') === option.value}
                       className={cn(
                         'px-3 py-2.5 font-mono text-[10px] uppercase tracking-[0.12em] transition-colors',
+                        'focus:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-[#E8593C]',
                         (filters.sort ?? 'newest') === option.value
                           ? 'bg-[#2C1A0E] text-[#E8E4DC]'
-                          : 'text-[#3C2A1A]/60 hover:text-[#2C1A0E]',
+                          : 'text-[#3C2A1A]/60 hover:bg-[#2C1A0E]/[0.07] hover:text-[#2C1A0E] active:bg-[#2C1A0E]/[0.12]',
                       )}
                     >
                       {option.label}
@@ -458,6 +468,7 @@ export default function MarketplacePage() {
                         unit={unit}
                         fxRate={fxRate}
                         imagePriority={index < MARKETPLACE_PAGE_SIZE}
+                        onOpenQuickView={setQuickViewProduct}
                       />
                     </motion.div>
                     {(index + 1) % 12 === 0 && index + 1 < products.length && (
@@ -514,6 +525,18 @@ export default function MarketplacePage() {
         </section>
         </div>
       </main>
+
+      {/* Clicking a card photo opens this instead of navigating, so the grid and its
+          scroll position survive a browse-and-reject pass through the catalogue. */}
+      <FabricQuickView
+        product={quickViewProduct}
+        onOpenChange={(open) => {
+          if (!open) setQuickViewProduct(null)
+        }}
+        currency={currency}
+        unit={unit}
+        fxRate={fxRate}
+      />
 
       {/* Below lg the same panel renders inside a left sheet. One component, two shells. */}
       <Sheet open={filterSheetOpen} onOpenChange={setFilterSheetOpen}>

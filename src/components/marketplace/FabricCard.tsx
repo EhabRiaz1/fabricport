@@ -207,7 +207,11 @@ function FabricCardComponent({
   // card by construction, so the grid stays uniform without the flex trap.
   const cardClassName = cn(
     'group relative flex flex-col clip-corner clip-corner-accent bg-card select-none transition-transform duration-200',
-    isGrid && 'w-full overflow-hidden hover:-translate-y-1',
+    // @container so the title can size itself against THIS card rather than the viewport.
+    // The grid is 3 columns from lg up, so a card is ~257px at a 1440 window and ~145px at
+    // 1024 -- the same breakpoint, wildly different amount of room. Viewport breakpoints
+    // cannot see that difference, which is why long titles kept losing their product code.
+    isGrid && '@container w-full overflow-hidden hover:-translate-y-1',
     isFeatured && 'min-h-[420px]',
     !isGrid && !isFeatured && 'min-h-[340px]',
     className,
@@ -222,24 +226,43 @@ function FabricCardComponent({
           <div className="flex items-start justify-between gap-2">
             <h3
               className={cn(
-                'min-w-0 flex-1 font-display font-semibold text-text-dark transition-colors group-hover:text-accent line-clamp-2',
-                // The `/[1.2]` modifier sets font-size and line-height in one declaration.
+                'min-w-0 flex-1 font-display font-semibold text-text-dark transition-colors group-hover:text-accent',
+                // The `/[1.25]` modifier sets font-size and line-height in one declaration.
                 // Plain `leading-tight` loses to the line-height that Tailwind's `text-base`
                 // ships with, which made a wrapped title 48px tall inside a 40px box and
                 // pushed its second line over the supplier name.
                 isFeatured
-                  ? 'text-lg/[1.2]'
+                  ? 'text-lg/[1.25]'
                   : isGrid
-                    ? 'text-sm/[1.2] sm:text-base/[1.2]'
-                    : 'text-sm/[1.2]',
-                // Reserve two lines whether the title wraps or not.
-                isGrid && 'h-[2.1rem] sm:h-[2.4rem]',
+                    // Container queries, not viewport ones. A card at 257px (1440 window)
+                    // keeps text-base exactly as it is today; the same card at 171px (1100
+                    // window) steps down so "Rib 1x1 Spandex (5603)" still fits its two
+                    // lines instead of losing the code to an ellipsis.
+                    ? 'text-[12px]/[1.25] @min-[188px]:text-sm/[1.25] @min-[250px]:text-base/[1.25]'
+                    : 'text-sm/[1.25]',
+                // Reserve the lines whether the title wraps or not, so every card in the
+                // grid is the same height. Heights are in `em`, so they track whichever
+                // size the container query picked -- and, unlike the old hard 2.4rem, they
+                // leave room for descenders. "2 Thread Terry" needed 39px in a 38.4px box,
+                // so every "y" and "(" was being shaved even at full width.
+                //
+                // Three lines once the card is narrow. Two is plenty at 257px, but at 145px
+                // "Rib 1x1 Spandex (5603)" cannot fit in two lines at any legible size, and
+                // an ellipsis that eats the product code makes the card useless -- the code
+                // is how a buyer names the fabric to their mill.
+                isGrid && 'line-clamp-3 h-[3.75em] @min-[250px]:line-clamp-2 @min-[250px]:h-[2.5em]',
+                !isGrid && 'line-clamp-2',
               )}
             >
               {product.title}
             </h3>
+            {/* Wide card: the pill sits beside the name, which is where it was asked for.
+                Below 236px it moves down to the supplier line -- see the note there. */}
             <span
-              className="mt-0.5 shrink-0 border border-[#C8C4BC] bg-[#F0ECE4] px-1.5 py-0.5 font-mono text-[9px] tabular-nums tracking-wide text-text-dark-secondary"
+              className={cn(
+                'mt-0.5 shrink-0 border border-[#C8C4BC] bg-[#F0ECE4] px-1.5 py-0.5 font-mono text-[9px] tabular-nums tracking-wide text-text-dark-secondary',
+                isGrid && 'hidden @min-[250px]:block',
+              )}
               title={`${product.stock_meters.toFixed(0)} meters in stock`}
             >
               {stock}
@@ -248,15 +271,34 @@ function FabricCardComponent({
           {/* In grid the element is always rendered so a supplier-less product does
               not gift its row height to the image. */}
           {(product.supplier || isGrid) && (
-            <p
-              className={cn(
-                'mt-0.5 truncate font-mono text-[8px] uppercase tracking-[0.18em] text-text-dark-secondary',
-                isGrid && 'h-[12px]',
+            <div className="mt-0.5 flex items-center justify-between gap-2">
+              <p
+                className={cn(
+                  'min-w-0 truncate font-mono text-[8px] uppercase tracking-[0.18em] text-text-dark-secondary',
+                  isGrid && 'h-[12px] leading-[12px]',
+                )}
+              >
+                {product.supplier?.brand_name}
+                {product.supplier?.is_verified && <span className="ml-1 text-accent">✓</span>}
+              </p>
+              {/*
+                * Narrow card: the pill lives here instead of on the title row.
+                *
+                * At 145px wide the pill was taking 40% of the title's line, leaving 74px
+                * for "3T Cross F.Terry LT.Raise (5450)" -- about eleven characters a line,
+                * which no number of lines rescues. The supplier row is a single short
+                * string and has the room to spare. Only ever one of the two is rendered
+                * (`hidden` removes the other from the accessibility tree as well).
+                */}
+              {isGrid && (
+                <span
+                  className="shrink-0 border border-[#C8C4BC] bg-[#F0ECE4] px-1.5 py-0.5 font-mono text-[9px] tabular-nums tracking-wide text-text-dark-secondary @min-[250px]:hidden"
+                  title={`${product.stock_meters.toFixed(0)} meters in stock`}
+                >
+                  {stock}
+                </span>
               )}
-            >
-              {product.supplier?.brand_name}
-              {product.supplier?.is_verified && <span className="ml-1 text-accent">✓</span>}
-            </p>
+            </div>
           )}
         </div>
 

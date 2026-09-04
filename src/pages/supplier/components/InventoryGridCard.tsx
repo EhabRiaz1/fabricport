@@ -48,11 +48,15 @@ export function InventoryGridCard({ product, onEdit }: InventoryGridCardProps) {
         }
       }}
       aria-label={`Edit ${product.title}`}
-      className="group clip-corner relative flex flex-col bg-card text-left transition-transform duration-200 hover:-translate-y-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      // @container for the same reason as the marketplace card: this grid runs up to four
+      // columns, so card width and viewport width are only loosely related and the title
+      // has to size itself against the card. Short SKU-style titles never hit it, but a
+      // supplier who names fabrics in prose would.
+      className="group @container clip-corner relative flex flex-col bg-card text-left transition-transform duration-200 hover:-translate-y-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
     >
       <div className="shrink-0 px-4 pb-1 pt-4">
         <div className="flex items-start justify-between gap-2">
-          <h3 className="line-clamp-2 h-[2.5rem] min-w-0 flex-1 font-display text-sm font-semibold leading-tight text-text-dark transition-colors group-hover:text-accent sm:text-base">
+          <h3 className="line-clamp-3 h-[3.75em] min-w-0 flex-1 font-display text-[12px]/[1.25] font-semibold text-text-dark transition-colors group-hover:text-accent @min-[188px]:text-sm/[1.25] @min-[250px]:line-clamp-2 @min-[250px]:h-[2.5em] @min-[250px]:text-base/[1.25]">
             {product.title}
           </h3>
           <StatusBadge status={product.status} className="shrink-0" />

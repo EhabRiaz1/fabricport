@@ -356,7 +356,7 @@ function FabricCardComponent({
               }}
               // Middle-click never fires onClick, so it opens the tab on its own.
               aria-label={`Quick view — ${product.title}`}
-              className="absolute inset-0 z-20 cursor-zoom-in focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent"
+              className="absolute inset-0 z-20 cursor-inspect focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent"
             >
               {/* Centred rather than a bottom bar: the bottom edge already carries the
                   colour swatch and the wishlist heart, and a full-width strip sat on top

@@ -31,7 +31,18 @@ const DialogContent = React.forwardRef<
     <DialogOverlay />
     <DialogPrimitive.Content
       ref={ref}
+      /*
+       * Lenis swallows wheel events document-wide, so without this a dialog that does
+       * need to scroll simply will not move on a trackpad -- on Windows or macOS.
+       * `SheetBody` has carried this for the same reason; `DialogContent` never did,
+       * which is why the quick view was stuck on a short viewport.
+       *
+       * `overscroll-contain` stops a scroll that reaches the end of the dialog from
+       * chaining to the page behind it.
+       */
+      data-lenis-prevent
       className={cn(
+        'overscroll-contain',
         'fixed left-1/2 top-1/2 z-50 grid w-full max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 border border-border bg-surface p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 clip-corner',
         className,
       )}

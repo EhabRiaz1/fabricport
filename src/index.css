@@ -40,12 +40,35 @@
  * visibly on the marketplace facet rail, where the rows are plain buttons.
  * `<summary>` is here for the same reason: the facet groups are native <details>.
  */
-button:not(:disabled),
-[role='button']:not([aria-disabled='true']),
+button:not(:disabled):not(.cursor-inspect),
+[role='button']:not([aria-disabled='true']):not(.cursor-inspect),
 summary,
 label:has(> input[type='checkbox']:not(:disabled)),
 label:has(> input[type='radio']:not(:disabled)) {
   cursor: pointer;
+}
+
+/*
+ * Inspect cursor — the lens ring, for anything that magnifies a fabric on hover.
+ *
+ * Replaces the OS `zoom-in` magnifier, which is a different shape on every platform and
+ * looks like a 2005 lightbox. This is a hairline ring with a centre reticle, drawn twice:
+ * an ink stroke over a translucent white one, so it survives both a black denim and a
+ * white voile. The hotspot is the ring's centre, which is the point the panel magnifies.
+ *
+ * SVG data URI rather than a PNG: it stays sharp on a HiDPI display and costs no request.
+ *
+ * Exactly ONE trailing keyword. The `cursor` grammar is `[<url> [<x> <y>]?]#, <keyword>`,
+ * so `zoom-in, auto` is two keywords and the whole declaration is dropped at parse time --
+ * silently, leaving the element on whatever it inherited. The `:not(.cursor-inspect)` on
+ * the pointer rule above matters for the same reason: `[role='button']:not(...)` is
+ * specificity (0,2,0) and would otherwise outrank this single class.
+ */
+.cursor-inspect {
+  cursor:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cg fill='none'%3E%3Ccircle cx='16' cy='16' r='11' stroke='%23FFFFFF' stroke-opacity='.85' stroke-width='3.5'/%3E%3Cpath d='M16 8.5v4M16 19.5v4M8.5 16h4M19.5 16h4' stroke='%23FFFFFF' stroke-opacity='.85' stroke-width='3.5' stroke-linecap='round'/%3E%3Ccircle cx='16' cy='16' r='11' stroke='%232C1A0E' stroke-width='1.5'/%3E%3Cpath d='M16 8.5v4M16 19.5v4M8.5 16h4M19.5 16h4' stroke='%232C1A0E' stroke-width='1.5' stroke-linecap='round'/%3E%3Ccircle cx='16' cy='16' r='1.25' fill='%23E8593C'/%3E%3C/g%3E%3C/svg%3E")
+      16 16,
+    zoom-in;
 }
 
 html {

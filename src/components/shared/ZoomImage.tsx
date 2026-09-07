@@ -284,7 +284,7 @@ export function ZoomImage({
         aria-label={onOpenViewer ? `${alt} — open full size` : undefined}
         className={cn(
           'group relative aspect-square w-full overflow-hidden bg-elevated',
-          onOpenViewer && 'cursor-zoom-in focus:outline-none focus-visible:ring-1 focus-visible:ring-accent',
+          onOpenViewer && 'cursor-inspect focus:outline-none focus-visible:ring-1 focus-visible:ring-accent',
           className,
         )}
       >

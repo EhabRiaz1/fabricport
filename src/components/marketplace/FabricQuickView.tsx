@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Box, Download, ExternalLink } from 'lucide-react'
+import { Box, ExternalLink } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -13,8 +13,6 @@ import { VerifiedBadge } from '@/components/ui/badge'
 import {
   cn,
   formatPrice,
-  getDigitalFabricName,
-  getDigitalFabricUrl,
   getProductImageUrl,
   metersToYards,
 } from '@/lib/utils'
@@ -129,14 +127,22 @@ export function FabricQuickView({
 
   if (!product) return null
 
-  const digitalFabric = product.scan_files?.[0] ?? null
+  const hasDigitalFabric = (product.scan_files?.length ?? 0) > 0
   const heroPath = images[activeImage] ?? images[0] ?? null
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        // focus:outline-none because onOpenAutoFocus below focuses this panel, and the UA
-        // draws its default ring on a programmatically focused container.
+        /*
+         * focus:outline-none because onOpenAutoFocus below focuses this panel, and the UA
+         * draws its default ring on a programmatically focused container.
+         *
+         * The modal is sized to FIT, not to scroll. `overflow-y-auto` stays only as the
+         * last resort for a viewport shorter than the content can compress to (a phone in
+         * landscape, say) -- and `DialogContent` now carries `data-lenis-prevent`, so when
+         * it does scroll a trackpad actually moves it. Without that Lenis eats the wheel
+         * events document-wide and the panel is simply stuck.
+         */
         className="max-h-[92dvh] w-[calc(100vw-2rem)] max-w-4xl overflow-y-auto bg-card p-0 text-text-dark focus:outline-none sm:w-full"
         aria-describedby={undefined}
         // Radix otherwise focuses the first focusable child, which here is the wishlist
@@ -148,9 +154,11 @@ export function FabricQuickView({
         }}
       >
         <div className="grid gap-0 md:grid-cols-2">
-          {/* Photo column */}
-          <div className="bg-[#D8D4CC] p-4 sm:p-6">
-            <div className="relative aspect-square w-full overflow-hidden bg-[#D8D4CC]">
+          {/* Photo column. On a stacked (mobile) layout the photo is capped in dvh rather
+              than left square, because a square photo plus the spec list is taller than a
+              phone and was the single biggest cause of the modal needing to scroll. */}
+          <div className="bg-[#D8D4CC] p-3 sm:p-6">
+            <div className="relative mx-auto aspect-square max-h-[32dvh] w-full overflow-hidden bg-[#D8D4CC] [@media(max-height:700px)]:max-h-[24dvh] md:max-h-none">
               {heroPath ? (
                 <img
                   src={getProductImageUrl(heroPath, { variant: 'medium' })}
@@ -176,7 +184,7 @@ export function FabricQuickView({
             </div>
 
             {images.length > 1 && (
-              <div className="mt-3 flex gap-2 overflow-x-auto scrollbar-none">
+              <div className="mt-3 flex gap-2 overflow-x-auto scrollbar-none [@media(max-height:700px)]:mt-2">
                 {images.map((path, index) => (
                   <button
                     key={path}
@@ -184,7 +192,9 @@ export function FabricQuickView({
                     onClick={() => setActiveImage(index)}
                     aria-label={`Image ${index + 1}`}
                     className={cn(
-                      'h-14 w-14 shrink-0 overflow-hidden border-2 transition-colors',
+                      // Shrunk rather than hidden on a short viewport: switching image is
+                      // the main thing people do in here, and 36px is still a real target.
+                      'h-14 w-14 shrink-0 overflow-hidden border-2 transition-colors [@media(max-height:700px)]:h-9 [@media(max-height:700px)]:w-9',
                       index === activeImage ? 'border-accent' : 'border-transparent',
                     )}
                   >
@@ -202,7 +212,7 @@ export function FabricQuickView({
           </div>
 
           {/* Detail column. pr-10 keeps the heading clear of the ✕ Radix renders at top-4. */}
-          <div className="flex flex-col p-5 pr-10 sm:p-6 sm:pr-12">
+          <div className="flex flex-col p-4 pr-10 sm:p-6 sm:pr-12">
             <p className="font-mono text-[10px] uppercase tracking-widest text-text-dark-secondary">
               {getFabricType(product) ?? 'Fabric'}
             </p>
@@ -237,20 +247,25 @@ export function FabricQuickView({
               </p>
             )}
 
+            {/* Dense: two columns, label above value. A quick view that scrolls is a
+                worse quick view, and this is what buys the room to avoid it. */}
             <div className="mt-4">
-              <SpecTable rows={specRows} />
+              <SpecTable rows={specRows} dense />
             </div>
 
-            {digitalFabric && (
-              <a
-                href={getDigitalFabricUrl(digitalFabric)}
-                download={getDigitalFabricName(digitalFabric)}
-                className="clip-corner-sm mt-4 inline-flex w-fit items-center gap-2 border border-border-cream px-3 py-2 font-mono text-[10px] uppercase tracking-[0.16em] text-text-dark transition-colors hover:border-accent hover:text-accent"
-              >
-                <Box className="h-3.5 w-3.5" />
-                ZFAB
-                <Download className="h-3.5 w-3.5" />
-              </a>
+            {/*
+              * Says a digital fabric exists; does not hand it over.
+              *
+              * A .zfab is 18 MB on average and 39 MB at the top end. Firing that off a
+              * modal people open to skim a dozen fabrics is the wrong place for it -- the
+              * download belongs on the product page, where someone has decided they want
+              * this cloth. So this is a badge, and the button below is how you get to it.
+              */}
+            {hasDigitalFabric && (
+              <p className="mt-3 inline-flex w-fit items-center gap-2 border border-border-cream bg-card-hover px-2.5 py-1.5 font-mono text-[9px] uppercase tracking-[0.16em] text-text-dark-secondary">
+                <Box className="h-3.5 w-3.5 text-accent" />
+                Digital fabric available · CLO 3D
+              </p>
             )}
 
             {/*
@@ -262,7 +277,7 @@ export function FabricQuickView({
               href={`/fabric/${product.slug}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="clip-corner-sm mt-6 inline-flex items-center justify-center gap-2 bg-accent px-6 py-3 font-mono text-[10px] uppercase tracking-[0.18em] text-white transition-colors hover:bg-accent/90"
+              className="clip-corner-sm mt-6 inline-flex items-center justify-center gap-2 bg-accent px-6 py-3 font-mono text-[10px] uppercase tracking-[0.18em] text-white transition-colors hover:bg-accent/90 [@media(max-height:700px)]:mt-3 [@media(max-height:700px)]:py-2.5"
             >
               Open full product page
               <ExternalLink className="h-3.5 w-3.5" />

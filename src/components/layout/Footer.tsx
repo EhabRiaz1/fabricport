@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { cn } from '@/lib/utils'
+import { BrandLogo } from '@/components/layout/BrandLogo'
 import { useChatDock } from '@/lib/chat-dock'
 
 /**
@@ -33,16 +34,12 @@ export function Footer({ className }: FooterProps) {
       <div className="relative mx-auto max-w-7xl px-6 pt-16 pb-10 lg:px-8">
         <div className="grid gap-12 md:grid-cols-4 pb-12 border-b border-[#3C2A1A]/10">
           <div className="md:col-span-2">
-            <Link to="/" className="font-display text-lg font-semibold tracking-tight text-[#2C1A0E]">
-              Fabric<span className="text-accent">Port</span>
-            </Link>
+            <BrandLogo imgClassName="brightness-0 opacity-85" />
             <p className="mt-4 max-w-xs text-sm leading-relaxed text-[#3C2A1A]/55">
               Pakistan's premier B2B surplus fabric marketplace.
               Source verified textiles with precision specs, 3D visualization,
               and direct supplier access.
             </p>
-            {/* Accent separator */}
-            <div className="mt-6 h-px w-8 bg-accent" />
           </div>
 
           {Object.entries(FOOTER_LINKS).map(([title, links]) => (

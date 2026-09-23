@@ -23,6 +23,7 @@ export interface ProductDraft {
   description: string
   visibility: ProductVisibility
   sampleAvailable: boolean
+  running: boolean
 }
 
 export function draftFromProduct(product: ProductWithRelations): ProductDraft {
@@ -35,6 +36,7 @@ export function draftFromProduct(product: ProductWithRelations): ProductDraft {
     description: product.description ?? '',
     visibility: product.visibility,
     sampleAvailable: product.sample_available,
+    running: product.is_running,
   }
 }
 
@@ -60,6 +62,7 @@ export async function saveProductDraft(
       description: draft.description.trim() || null,
       visibility: draft.visibility,
       sample_available: draft.sampleAvailable,
+      is_running: draft.running,
       // Price edits re-open approval (also enforced by the DB guard trigger).
       price_approved: false,
       updated_at: new Date().toISOString(),
@@ -198,6 +201,16 @@ export function ProductEditDialog({
             className="h-4 w-4 accent-accent"
           />
           Sample available
+        </label>
+
+        <label className="flex w-fit items-center gap-2 text-sm text-text-dark">
+          <input
+            type="checkbox"
+            checked={draft.running}
+            onChange={(e) => update({ running: e.target.checked })}
+            className="h-4 w-4 accent-accent"
+          />
+          Running fabric
         </label>
 
         <Field label="Description">

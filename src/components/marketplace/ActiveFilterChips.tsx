@@ -83,6 +83,13 @@ export function ActiveFilterChips({
       onRemove: () => onChange({ ...filters, widthMin: undefined, widthMax: undefined }),
     })
   }
+  if (filters.running != null) {
+    chips.push({
+      key: 'running',
+      label: `Running fabric: ${filters.running ? 'Yes' : 'No'}`,
+      onRemove: () => onChange({ ...filters, running: undefined }),
+    })
+  }
   // Spec facets. Without these a weave or fibre filter would be applied with nothing in the
   // toolbar to show for it -- the results would just be mysteriously short.
   for (const key of [

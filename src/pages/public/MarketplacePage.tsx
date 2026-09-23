@@ -122,7 +122,7 @@ export default function MarketplacePage() {
           .from('products')
           // spec_facets rides along so the sidebar's option lists and counts come from the
           // same single scan rather than a query per facet group.
-          .select('supplier_id, category_id, color_family, stock_meters, spec_facets')
+          .select('supplier_id, category_id, color_family, stock_meters, spec_facets, is_running')
           .eq('status', 'published'),
       ])
 
@@ -146,6 +146,8 @@ export default function MarketplacePage() {
           byColor[family] = (byColor[family] ?? 0) + 1
         }
         totalMeters += row.stock_meters ?? 0
+        // Not a spec facet, but counted alongside them so the panel reads one map.
+        tally('running', row.is_running ? 'Yes' : 'No')
 
         const facets = (row.spec_facets ?? {}) as Record<string, string | string[]>
         for (const [facet, value] of Object.entries(facets)) {

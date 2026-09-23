@@ -69,6 +69,7 @@ export default function ProductFormPage() {
   const [moqMeters, setMoqMeters] = useState('')
   const [priceMinPkr, setPriceMinPkr] = useState('')
   const [priceMaxPkr, setPriceMaxPkr] = useState('')
+  const [running, setRunning] = useState(false)
   const [images, setImages] = useState<string[]>([])
   const [videoUrl, setVideoUrl] = useState('')
   const [uploadingVideo, setUploadingVideo] = useState(false)
@@ -143,6 +144,7 @@ export default function ProductFormPage() {
       setMoqMeters(data.moq_meters != null ? String(data.moq_meters) : '')
       setPriceMinPkr(data.price_min_pkr != null ? String(data.price_min_pkr) : '')
       setPriceMaxPkr(data.price_max_pkr != null ? String(data.price_max_pkr) : '')
+      setRunning(data.is_running)
       setImages(data.images ?? [])
       setVideoUrl(data.video_url ?? '')
       setColor({
@@ -358,6 +360,7 @@ export default function ProductFormPage() {
       moq_meters: moqMeters ? Number(moqMeters) : null,
       price_min_pkr: priceMinPkr ? Number(priceMinPkr) : null,
       price_max_pkr: priceMaxPkr ? Number(priceMaxPkr) : null,
+      is_running: running,
       images,
       video_url: videoUrl || null,
       color_supplier_name: color.color_supplier_name,
@@ -545,6 +548,15 @@ export default function ProductFormPage() {
                 />
               </div>
             </div>
+            <label className="flex w-fit cursor-pointer items-center gap-2 text-sm text-text-dark">
+              <input
+                type="checkbox"
+                checked={running}
+                onChange={(e) => setRunning(e.target.checked)}
+                className="h-4 w-4 accent-accent"
+              />
+              Running fabric
+            </label>
           </CardContent>
         </Card>
 

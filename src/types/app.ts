@@ -72,6 +72,8 @@ export interface MarketplaceFilters {
   /** Normalised fibre families ("Cotton" covers Organic/BCI/Supima/Recycled cotton). */
   fibres?: string[]
   garments?: string[]
+  /** Running fabric: true = Yes, false = No, undefined = either. */
+  running?: boolean
   widthMin?: number
   widthMax?: number
   categorySlug?: string

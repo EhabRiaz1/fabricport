@@ -283,7 +283,17 @@ export default function SupplierInventoryPage() {
                       Sample available
                     </label>
                   </div>
-                  <div className="sm:col-span-2 lg:col-span-2" />
+                  <div className="flex items-end pb-2">
+                    <label className="flex cursor-pointer items-center gap-2 text-sm text-text-dark">
+                      <input
+                        type="checkbox"
+                        checked={drafts[product.id]?.running ?? false}
+                        onChange={(e) => updateDraft(product.id, { running: e.target.checked })}
+                        className="h-4 w-4 accent-accent"
+                      />
+                      Running fabric
+                    </label>
+                  </div>
                 </div>
 
                 <div>

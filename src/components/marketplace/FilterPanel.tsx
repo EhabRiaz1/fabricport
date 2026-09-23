@@ -228,6 +228,26 @@ export function FilterPanel({
         </div>
       </FacetGroup>
 
+      {/* Single-select: clicking the active option again clears it. */}
+      <FacetGroup label="Running fabric" open>
+        <ul className="flex flex-col">
+          {([true, false] as const).map((value) => {
+            const label = value ? 'Yes' : 'No'
+            return (
+              <FacetRow
+                key={label}
+                label={label}
+                count={specCounts.running?.[label] ?? 0}
+                selected={filters.running === value}
+                onSelect={() =>
+                  onPatch({ running: filters.running === value ? undefined : value })
+                }
+              />
+            )
+          })}
+        </ul>
+      </FacetGroup>
+
       {SPEC_GROUPS.map((group) => {
         const counts = specCounts[group.facet] ?? {}
         const selected = (filters[group.filterKey] as string[] | undefined) ?? []

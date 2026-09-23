@@ -403,6 +403,7 @@ export interface Database {
           composition: string | null
           spec_facets: ProductSpecFacets
           sample_available: boolean
+          is_running: boolean
           video_url: string | null
           images: string[]
           scan_files: string[]
@@ -447,6 +448,7 @@ export interface Database {
           composition?: string | null
           spec_facets?: ProductSpecFacets
           sample_available?: boolean
+          is_running?: boolean
           video_url?: string | null
           images?: string[]
           scan_files?: string[]
@@ -490,6 +492,7 @@ export interface Database {
           composition?: string | null
           spec_facets?: ProductSpecFacets
           sample_available?: boolean
+          is_running?: boolean
           video_url?: string | null
           images?: string[]
           scan_files?: string[]

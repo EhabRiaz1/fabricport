@@ -228,26 +228,6 @@ export function FilterPanel({
         </div>
       </FacetGroup>
 
-      {/* Single-select: clicking the active option again clears it. */}
-      <FacetGroup label="Running fabric" open>
-        <ul className="flex flex-col">
-          {([true, false] as const).map((value) => {
-            const label = value ? 'Yes' : 'No'
-            return (
-              <FacetRow
-                key={label}
-                label={label}
-                count={specCounts.running?.[label] ?? 0}
-                selected={filters.running === value}
-                onSelect={() =>
-                  onPatch({ running: filters.running === value ? undefined : value })
-                }
-              />
-            )
-          })}
-        </ul>
-      </FacetGroup>
-
       {SPEC_GROUPS.map((group) => {
         const counts = specCounts[group.facet] ?? {}
         const selected = (filters[group.filterKey] as string[] | undefined) ?? []
@@ -256,7 +236,9 @@ export function FilterPanel({
         const options = Array.from(
           new Set([...Object.keys(counts), ...selected]),
         ).sort((a, b) => (counts[b] ?? 0) - (counts[a] ?? 0) || a.localeCompare(b))
-        if (options.length === 0) return null
+        // Fabric type also carries the Running fabric toggle, so it renders even when empty.
+        const isType = group.facet === 'type'
+        if (options.length === 0 && !isType) return null
 
         return (
           <FacetGroup
@@ -275,6 +257,14 @@ export function FilterPanel({
                   onSelect={() => onToggleValue(group.filterKey, option)}
                 />
               ))}
+              {isType && (
+                <FacetRow
+                  label="Running fabric"
+                  count={specCounts.running?.Yes ?? 0}
+                  selected={filters.running === true}
+                  onSelect={() => onPatch({ running: filters.running === true ? undefined : true })}
+                />
+              )}
             </ul>
           </FacetGroup>
         )

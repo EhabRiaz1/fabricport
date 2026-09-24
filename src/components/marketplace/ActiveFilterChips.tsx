@@ -83,10 +83,10 @@ export function ActiveFilterChips({
       onRemove: () => onChange({ ...filters, widthMin: undefined, widthMax: undefined }),
     })
   }
-  if (filters.running != null) {
+  if (filters.running) {
     chips.push({
       key: 'running',
-      label: `Running fabric: ${filters.running ? 'Yes' : 'No'}`,
+      label: 'Running fabric',
       onRemove: () => onChange({ ...filters, running: undefined }),
     })
   }

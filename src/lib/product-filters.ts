@@ -57,7 +57,7 @@ export function applyProductFilters<Q extends AnyQuery>(
   if (filters?.widthMin != null) q = q.gte('width_inches', filters.widthMin) as Q
   if (filters?.widthMax != null) q = q.lte('width_inches', filters.widthMax) as Q
 
-  if (filters?.running != null) q = q.eq('is_running', filters.running) as Q
+  if (filters?.running) q = q.eq('is_running', true) as Q
 
   if (ids.supplierId) q = q.eq('supplier_id', ids.supplierId) as Q
   if (ids.categoryId) q = q.eq('category_id', ids.categoryId) as Q
@@ -90,7 +90,7 @@ export function countActiveFilters(filters: MarketplaceFilters): number {
   if (filters.priceMin != null || filters.priceMax != null) n++
   if (filters.gsmMin != null || filters.gsmMax != null) n++
   if (filters.widthMin != null || filters.widthMax != null) n++
-  if (filters.running != null) n++
+  if (filters.running) n++
   if (filters.search) n++
   for (const key of [...Object.keys(SCALAR_FACETS), ...Object.keys(ARRAY_FACETS)]) {
     const selected = filters[key as keyof MarketplaceFilters] as string[] | undefined

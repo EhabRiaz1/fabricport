@@ -37,8 +37,7 @@ export function filtersFromParams(params: URLSearchParams): MarketplaceFilters {
   }
   const search = params.get('q')
   if (search) filters.search = search
-  const running = params.get('running')
-  if (running === 'yes' || running === 'no') filters.running = running === 'yes'
+  if (params.get('running') === 'yes') filters.running = true
   const sort = params.get('sort')
   if (sort === 'price_asc' || sort === 'price_desc') filters.sort = sort
   for (const [key, param] of LIST_FACETS) {
@@ -70,7 +69,7 @@ export function paramsFromFilters(filters: MarketplaceFilters): URLSearchParams 
   if (filters.supplierSlug) params.set('supplier', filters.supplierSlug)
   if (filters.colorFamilies?.length) params.set('colors', filters.colorFamilies.join(','))
   if (filters.search) params.set('q', filters.search)
-  if (filters.running != null) params.set('running', filters.running ? 'yes' : 'no')
+  if (filters.running) params.set('running', 'yes')
   if (filters.sort && filters.sort !== 'newest') params.set('sort', filters.sort)
   if (filters.priceMin != null) params.set('price_min', String(filters.priceMin))
   if (filters.priceMax != null) params.set('price_max', String(filters.priceMax))

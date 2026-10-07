@@ -49,6 +49,7 @@ const BuyerInvoiceDetailPage = lazy(() => import('@/pages/buyer/InvoiceDetailPag
 const BuyerSampleRequestsPage = lazy(() => import('@/pages/buyer/SampleRequestsPage'))
 const BuyerSampleRequestDetailPage = lazy(() => import('@/pages/buyer/SampleRequestDetailPage'))
 const BuyerSettingsPage = lazy(() => import('@/pages/buyer/SettingsPage'))
+const PrivatePortalPage = lazy(() => import('@/pages/buyer/PrivatePortalPage'))
 const SupplierDashboardPage = lazy(() => import('@/pages/supplier/DashboardPage'))
 const SupplierAnalyticsPage = lazy(() => import('@/pages/supplier/AnalyticsPage'))
 const SupplierInventoryPage = lazy(() => import('@/pages/supplier/InventoryPage'))
@@ -131,6 +132,14 @@ export default function App() {
             <Route path="/supplier/:slug" element={<SupplierPage />} />
             <Route path="/vendors" element={<VendorsPage />} />
             <Route path="/c/:token" element={<CataloguePage />} />
+            <Route
+              path="/private-portal/:slug?"
+              element={
+                <AuthGuard zone="buyer">
+                  <PrivatePortalPage />
+                </AuthGuard>
+              }
+            />
             <Route path="/auth/login" element={<LoginPage />} />
             <Route path="/auth/register" element={<RegisterPage />} />
             <Route

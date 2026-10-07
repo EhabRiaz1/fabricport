@@ -19,6 +19,7 @@ export default function VendorsPage() {
         .from('products')
         .select('supplier_id, images')
         .eq('status', 'published')
+        .eq('visibility', 'public')
         .order('published_at', { ascending: false })
         .limit(400)
 

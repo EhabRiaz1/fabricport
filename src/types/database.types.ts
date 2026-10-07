@@ -631,6 +631,39 @@ export interface Database {
           },
         ]
       }
+      product_private_buyers: {
+        Row: {
+          product_id: string
+          buyer_id: string
+          created_at: string
+        }
+        Insert: {
+          product_id: string
+          buyer_id: string
+          created_at?: string
+        }
+        Update: {
+          product_id?: string
+          buyer_id?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'product_private_buyers_product_id_fkey'
+            columns: ['product_id']
+            isOneToOne: false
+            referencedRelation: 'products'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'product_private_buyers_buyer_id_fkey'
+            columns: ['buyer_id']
+            isOneToOne: false
+            referencedRelation: 'buyers'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       listing_requests: {
         Row: {
           id: string

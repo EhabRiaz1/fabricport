@@ -27,6 +27,7 @@ import type {
   ProductAttribute,
 } from '@/types/database.types'
 import { FabricGroupPicker } from '@/components/admin/FabricGroupPicker'
+import { PrivateBuyerPicker } from '@/components/admin/PrivateBuyerPicker'
 import { AdminPageHeader } from './components/AdminPageHeader'
 
 function slugify(text: string) {
@@ -70,6 +71,8 @@ export default function ProductFormPage() {
   const [priceMinPkr, setPriceMinPkr] = useState('')
   const [priceMaxPkr, setPriceMaxPkr] = useState('')
   const [running, setRunning] = useState(false)
+  const [isPrivate, setIsPrivate] = useState(false)
+  const [privateBuyerIds, setPrivateBuyerIds] = useState<string[]>([])
   const [images, setImages] = useState<string[]>([])
   const [videoUrl, setVideoUrl] = useState('')
   const [uploadingVideo, setUploadingVideo] = useState(false)
@@ -124,7 +127,7 @@ export default function ProductFormPage() {
       setLoading(true)
       const { data, error: fetchError } = await supabase
         .from('products')
-        .select('*, attributes:product_attributes(*)')
+        .select('*, attributes:product_attributes(*), private_buyers:product_private_buyers(buyer_id)')
         .eq('id', productId)
         .maybeSingle()
 
@@ -145,6 +148,10 @@ export default function ProductFormPage() {
       setPriceMinPkr(data.price_min_pkr != null ? String(data.price_min_pkr) : '')
       setPriceMaxPkr(data.price_max_pkr != null ? String(data.price_max_pkr) : '')
       setRunning(data.is_running)
+      setIsPrivate(data.visibility === 'private')
+      setPrivateBuyerIds(
+        ((data.private_buyers ?? []) as { buyer_id: string }[]).map((row) => row.buyer_id),
+      )
       setImages(data.images ?? [])
       setVideoUrl(data.video_url ?? '')
       setColor({
@@ -335,9 +342,29 @@ export default function ProductFormPage() {
     }
   }
 
+  // Replace-all, like saveAttributes. A public product keeps no buyer rows so a later
+  // switch back to private starts from an empty list rather than a stale one.
+  async function savePrivateBuyers(productId: string) {
+    const { error: deleteError } = await supabase
+      .from('product_private_buyers')
+      .delete()
+      .eq('product_id', productId)
+    if (deleteError) throw deleteError
+    if (!isPrivate || privateBuyerIds.length === 0) return
+    const { error: insertError } = await supabase
+      .from('product_private_buyers')
+      .insert(privateBuyerIds.map((buyerId) => ({ product_id: productId, buyer_id: buyerId })))
+    if (insertError) throw insertError
+  }
+
   async function handleSave(publish: boolean) {
     if (!title.trim() || !slug.trim() || !supplierId) {
       setError('Title, slug, and supplier are required.')
+      return
+    }
+
+    if (isPrivate && privateBuyerIds.length === 0) {
+      setError('Choose at least one buyer who can see this private fabric.')
       return
     }
 
@@ -361,6 +388,7 @@ export default function ProductFormPage() {
       price_min_pkr: priceMinPkr ? Number(priceMinPkr) : null,
       price_max_pkr: priceMaxPkr ? Number(priceMaxPkr) : null,
       is_running: running,
+      visibility: isPrivate ? ('private' as const) : ('public' as const),
       images,
       video_url: videoUrl || null,
       color_supplier_name: color.color_supplier_name,
@@ -384,6 +412,7 @@ export default function ProductFormPage() {
 
         if (updateError) throw updateError
         await saveAttributes(id)
+        await savePrivateBuyers(id)
         navigate('/admin/products')
       } else {
         const { data, error: insertError } = await supabase
@@ -394,6 +423,7 @@ export default function ProductFormPage() {
 
         if (insertError) throw insertError
         await saveAttributes(data.id)
+        await savePrivateBuyers(data.id)
         navigate('/admin/products')
       }
     } catch (err) {
@@ -700,6 +730,30 @@ export default function ProductFormPage() {
           </Card>
         </div>
       </div>
+
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle>Visibility</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <label className="flex w-fit cursor-pointer items-center gap-2 text-sm text-text-dark">
+            <input
+              type="checkbox"
+              checked={isPrivate}
+              onChange={(e) => setIsPrivate(e.target.checked)}
+              className="h-4 w-4 accent-accent"
+            />
+            Private — only selected buyers can see this fabric
+          </label>
+          {isPrivate ? (
+            <PrivateBuyerPicker value={privateBuyerIds} onChange={setPrivateBuyerIds} />
+          ) : (
+            <p className="text-sm text-text-dark-secondary">
+              Public — listed on the marketplace for everyone.
+            </p>
+          )}
+        </CardContent>
+      </Card>
 
       {attributes.length > 0 && (
         <Card className="mt-6">

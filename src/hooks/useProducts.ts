@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { applyProductFilters } from '@/lib/product-filters'
 import type { MarketplaceFilters, ProductWithRelations } from '@/types/app'
+import type { ProductVisibility } from '@/types/database.types'
 
 const PRODUCT_SELECT = `
   *,
@@ -34,6 +35,11 @@ export interface UseProductsOptions {
   /** Use lighter select + pagination (marketplace grid). */
   paginated?: boolean
   pageSize?: number
+  /**
+   * Defaults to public. RLS already lets a buyer read private fabrics shared with them;
+   * this keeps those in the Private Portal and out of the shared marketplace lists.
+   */
+  visibility?: ProductVisibility
 }
 
 async function resolveSupplierId(slug: string): Promise<string | null> {
@@ -79,6 +85,7 @@ export async function fetchProductsPage(
     paginated = false,
     pageSize = MARKETPLACE_PAGE_SIZE,
     page = 0,
+    visibility = 'public',
   } = options
 
   const from = paginated ? page * pageSize : 0
@@ -108,6 +115,7 @@ export async function fetchProductsPage(
       .from('products')
       .select(PRODUCT_LIST_SELECT, { count: 'exact' })
       .eq('status', 'published')
+      .eq('visibility', visibility)
 
     if (sort === 'price_asc') {
       query = query.order('price_min_pkr', { ascending: true, nullsFirst: false })
@@ -132,6 +140,7 @@ export async function fetchProductsPage(
     .from('products')
     .select(PRODUCT_SELECT)
     .eq('status', 'published')
+    .eq('visibility', visibility)
     .order('published_at', { ascending: false })
 
   if (featured) query = query.eq('is_featured', true)
@@ -166,6 +175,7 @@ export function useProducts(options: UseProductsOptions = {}) {
     enabled = true,
     paginated = false,
     pageSize = MARKETPLACE_PAGE_SIZE,
+    visibility,
   } = options
   const [products, setProducts] = useState<ProductWithRelations[]>([])
   const [loading, setLoading] = useState(enabled)
@@ -191,11 +201,12 @@ export function useProducts(options: UseProductsOptions = {}) {
           paginated: true,
           pageSize,
           page: 0,
+          visibility,
         })
         setProducts(data)
         setTotal(count)
       } else {
-        const data = await fetchProducts({ filters, featured, supplierSlug, limit })
+        const data = await fetchProducts({ filters, featured, supplierSlug, limit, visibility })
         setProducts(data)
         setTotal(data.length)
       }
@@ -206,7 +217,7 @@ export function useProducts(options: UseProductsOptions = {}) {
     } finally {
       setLoading(false)
     }
-  }, [filterKey, featured, supplierSlug, limit, paginated, pageSize])
+  }, [filterKey, featured, supplierSlug, limit, paginated, pageSize, visibility])
 
   const loadMore = useCallback(async () => {
     if (!paginated || loadingMore || !hasMore) return
@@ -223,6 +234,7 @@ export function useProducts(options: UseProductsOptions = {}) {
         paginated: true,
         pageSize,
         page: nextPage,
+        visibility,
       })
       setProducts((prev) => [...prev, ...data])
       setTotal(count)
@@ -232,7 +244,7 @@ export function useProducts(options: UseProductsOptions = {}) {
     } finally {
       setLoadingMore(false)
     }
-  }, [paginated, loadingMore, hasMore, page, filterKey, featured, supplierSlug, pageSize])
+  }, [paginated, loadingMore, hasMore, page, filterKey, featured, supplierSlug, pageSize, visibility])
 
   useEffect(() => {
     if (!enabled) {

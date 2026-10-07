@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Link, useLocation } from 'react-router-dom'
-import { ShoppingCart } from 'lucide-react'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { Lock, LogOut, ShoppingCart } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/contexts/AuthContext'
 import { ROLE_HOME_PATHS } from '@/types/app'
@@ -8,6 +8,7 @@ import { BrandLogo } from '@/components/layout/BrandLogo'
 import { CountBadge } from '@/components/shared/CountBadge'
 import { useCartCount } from '@/stores/cart'
 import { useCartUI } from '@/lib/cart'
+import { buyerDisplayName, usePrivatePortal } from '@/hooks/usePrivatePortal'
 
 const NAV_LINKS = [
   { label: 'Marketplace', href: '/marketplace' },
@@ -21,7 +22,9 @@ export interface PublicNavProps {
 export function PublicNav({ className }: PublicNavProps) {
   const [scrolled, setScrolled] = useState(false)
   const location = useLocation()
-  const { isAuthenticated, role } = useAuth()
+  const navigate = useNavigate()
+  const { isAuthenticated, role, profile, signOut } = useAuth()
+  const { hasAccess: hasPrivatePortal } = usePrivatePortal()
   const isHeroPage = location.pathname === '/'
   const portalHref = role ? ROLE_HOME_PATHS[role] : '/auth/login'
   const cartCount = useCartCount()
@@ -39,6 +42,12 @@ export function PublicNav({ className }: PublicNavProps) {
   }, [])
 
   const solid = scrolled || !isHeroPage
+  const linkTone = solid ? 'text-[#3C2A1A]/55' : 'text-white/60'
+
+  async function handleSignOut() {
+    await signOut()
+    navigate('/', { replace: true })
+  }
 
   return (
     <header
@@ -64,6 +73,19 @@ export function PublicNav({ className }: PublicNavProps) {
 
         {/* Center links */}
         <div className="hidden items-center gap-8 md:flex">
+          {hasPrivatePortal && profile && (
+            <Link
+              to="/private-portal"
+              className={cn(
+                'inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.18em] transition-colors hover:text-accent',
+                linkTone,
+                location.pathname.startsWith('/private-portal') && 'text-accent',
+              )}
+            >
+              <Lock className="h-3 w-3" />
+              {buyerDisplayName(profile)} - Private Portal
+            </Link>
+          )}
           {NAV_LINKS.map((link) => (
             <Link
               key={link.href}
@@ -90,6 +112,19 @@ export function PublicNav({ className }: PublicNavProps) {
           >
             {isAuthenticated ? 'My Portal' : 'Login'}
           </Link>
+          {isAuthenticated && (
+            <button
+              type="button"
+              onClick={handleSignOut}
+              className={cn(
+                'inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.18em] transition-colors hover:text-accent',
+                linkTone,
+              )}
+            >
+              <LogOut className="h-3 w-3" />
+              <span className="hidden sm:inline">Log out</span>
+            </button>
+          )}
           {/*
             * A bare icon would look bolted on -- there is not one other icon in this nav.
             * So it is a bordered square in the same visual language as the Browse CTA,

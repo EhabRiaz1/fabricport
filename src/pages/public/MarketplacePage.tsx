@@ -123,7 +123,8 @@ export default function MarketplacePage() {
           // spec_facets rides along so the sidebar's option lists and counts come from the
           // same single scan rather than a query per facet group.
           .select('supplier_id, category_id, color_family, stock_meters, spec_facets, is_running')
-          .eq('status', 'published'),
+          .eq('status', 'published')
+          .eq('visibility', 'public'),
       ])
 
       const bySupplier: Record<string, number> = {}

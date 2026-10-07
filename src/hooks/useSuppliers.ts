@@ -9,6 +9,7 @@ async function attachProductCounts(
     .from('products')
     .select('supplier_id')
     .eq('status', 'published')
+    .eq('visibility', 'public')
 
   if (error) throw new Error(error.message)
 

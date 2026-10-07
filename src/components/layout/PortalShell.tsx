@@ -195,7 +195,7 @@ export function PortalShell({ children, zone, title, className }: PortalShellPro
           {ZONE_LABELS[resolvedZone]}
         </p>
 
-        <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 py-2">
+        <nav className="scrollbar-subtle flex-1 space-y-0.5 overflow-y-auto px-3 py-2">
           {navItems.map((item, index) => {
             const Icon = ICON_MAP[item.icon as keyof typeof ICON_MAP] ?? LayoutDashboard
             const active =

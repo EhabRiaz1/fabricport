@@ -74,6 +74,7 @@ export function ZoomImage({
   const pendingRef = useRef<{ x: number; y: number } | null>(null)
   const panelImgRef = useRef<HTMLImageElement>(null)
   const lensRef = useRef<HTMLSpanElement>(null)
+  const preloadedRef = useRef(false)
 
   const [zoomed, setZoomed] = useState(false)
   const [canHover, setCanHover] = useState(false)
@@ -203,23 +204,33 @@ export function ZoomImage({
   }
 
   const onPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (!canHover || !zoomed) return
+    if (!canHover) return
+    // A move without a live panel means pointerenter never opened one: the page loaded
+    // (or the photo swapped in) under a cursor that was already there, or a scroll closed
+    // the panel mid-hover. Open it from here rather than making the user leave and re-enter.
+    if (!zoomed) {
+      openPanel(event)
+      return
+    }
     trackPointer(event.clientX, event.clientY)
     // Coalesce to one style write per frame regardless of pointer event rate.
     if (!rafRef.current) rafRef.current = requestAnimationFrame(applyPosition)
   }
 
-  const onPointerEnter = (event: React.PointerEvent<HTMLDivElement>) => {
+  const openPanel = (event: React.PointerEvent<HTMLDivElement>) => {
     if (!canHover) return
     const frame = frameRef.current
     if (!frame) return
     const box = measurePanel()
     if (!box) return
 
-    // Warm the full-size file on first hover only; the browser caches it thereafter.
-    const preload = new Image()
-    preload.onerror = () => setLargeFailed(true)
-    preload.src = zoomSrc
+    // Warm the full-size file once; the browser caches it thereafter.
+    if (!preloadedRef.current) {
+      preloadedRef.current = true
+      const preload = new Image()
+      preload.onerror = () => setLargeFailed(true)
+      preload.src = zoomSrc
+    }
 
     // Capture the rect once, here, and hand it to every pointermove for this hover. It
     // is the same measurement `measurePanel` just took, so the lens and the panel crop
@@ -261,7 +272,7 @@ export function ZoomImage({
     <>
       <div
         ref={frameRef}
-        onPointerEnter={onPointerEnter}
+        onPointerEnter={openPanel}
         onPointerLeave={closePanel}
         onPointerMove={onPointerMove}
         onClick={() => {

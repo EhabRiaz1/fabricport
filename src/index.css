@@ -104,6 +104,34 @@ body {
   display: none;
 }
 
+/*
+ * Quiet vertical scrollbar for panels like the portal sidebar. Unstyled, Windows draws
+ * its classic bar -- white track, arrow buttons, light border -- which macOS users never
+ * see because their overlay scrollbars hide until scroll. The standard properties cover
+ * Chrome 121+, Edge and Firefox (and when present, Chrome ignores the -webkit rules);
+ * the -webkit rules cover Safari and older Chromium.
+ */
+.scrollbar-subtle {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--color-ink) 18%, transparent) transparent;
+}
+.scrollbar-subtle:hover {
+  scrollbar-color: color-mix(in srgb, var(--color-ink) 35%, transparent) transparent;
+}
+.scrollbar-subtle::-webkit-scrollbar {
+  width: 6px;
+}
+.scrollbar-subtle::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollbar-subtle::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--color-ink) 18%, transparent);
+  border-radius: 3px;
+}
+.scrollbar-subtle:hover::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--color-ink) 35%, transparent);
+}
+
 /* Grain / film noise texture */
 .grain {
   position: relative;

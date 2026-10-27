@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { motion, useReducedMotion, useScroll, useTransform } from 'framer-motion'
+import { Lock } from 'lucide-react'
 import { BannerImage, bannerPosterSrc } from '@/components/shared/BannerImage'
 import { useBackgroundVideo } from '@/hooks/useBackgroundVideo'
 
@@ -50,7 +51,17 @@ function HeroStat({
   )
 }
 
-export interface ArchiveHeroProps {
+/** The words on the hero. Every field defaults to the public marketplace copy. */
+export interface ArchiveHeroCopy {
+  eyebrow?: string
+  title?: string
+  description?: string
+  /** Prefixes the eyebrow with a lock, for catalogues only the viewer can see. */
+  locked?: boolean
+  statLabels?: { fabrics?: string; mills?: string; meters?: string }
+}
+
+export interface ArchiveHeroProps extends ArchiveHeroCopy {
   totalFabrics: number
   totalMills: number
   totalMeters: number
@@ -67,6 +78,11 @@ export function ArchiveHero({
   totalMills,
   totalMeters,
   videoSrc = '/hero-fabric.mp4',
+  eyebrow = 'Marketplace — Verified surplus',
+  title = 'The Archive',
+  description = "Deadstock and surplus rolls from Pakistan's leading mills — scanned, spec'd and ready to ship. Every metre verified in-house.",
+  locked = false,
+  statLabels,
 }: ArchiveHeroProps) {
   const containerRef = useRef<HTMLElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -130,9 +146,14 @@ export function ArchiveHero({
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-          className="font-mono text-[10px] uppercase tracking-[0.34em] text-[#E8A070]"
+          className={
+            locked
+              ? 'inline-flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.34em] text-[#E8A070]'
+              : 'font-mono text-[10px] uppercase tracking-[0.34em] text-[#E8A070]'
+          }
         >
-          Marketplace — Verified surplus
+          {locked && <Lock className="h-3 w-3" aria-hidden />}
+          {eyebrow}
         </motion.p>
 
         <motion.h1
@@ -142,7 +163,7 @@ export function ArchiveHero({
           className="mt-4 font-display font-bold tracking-tight text-[#F5EDE4]"
           style={{ fontSize: 'clamp(44px, 7.5vw, 110px)', lineHeight: 0.95 }}
         >
-          The Archive
+          {title}
         </motion.h1>
 
         <motion.p
@@ -151,8 +172,7 @@ export function ArchiveHero({
           transition={{ duration: 0.6, delay: 0.18, ease: [0.22, 1, 0.36, 1] }}
           className="mt-5 max-w-xl text-sm leading-relaxed text-[#F5EDE4]/65 sm:text-base"
         >
-          Deadstock and surplus rolls from Pakistan's leading mills — scanned,
-          spec'd and ready to ship. Every metre verified in-house.
+          {description}
         </motion.p>
 
         <motion.div
@@ -161,9 +181,13 @@ export function ArchiveHero({
           transition={{ duration: 0.6, delay: 0.3, ease: [0.22, 1, 0.36, 1] }}
           className="mt-10 flex items-center gap-10 border-t border-[#F5EDE4]/12 pt-6 sm:gap-16"
         >
-          <HeroStat value={totalFabrics} label="Fabrics live" />
-          <HeroStat value={totalMills} label="Verified mills" />
-          <HeroStat value={totalMeters} label="Metres in stock" format={formatMeters} />
+          <HeroStat value={totalFabrics} label={statLabels?.fabrics ?? 'Fabrics live'} />
+          <HeroStat value={totalMills} label={statLabels?.mills ?? 'Verified mills'} />
+          <HeroStat
+            value={totalMeters}
+            label={statLabels?.meters ?? 'Metres in stock'}
+            format={formatMeters}
+          />
         </motion.div>
       </motion.div>
 

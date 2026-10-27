@@ -124,7 +124,7 @@ function SupplierFabrics({
 }) {
   const { products, loading } = useProducts({ supplierSlug: slug, visibility: 'private' })
   const { currency, unit } = usePreferencesStore()
-  const [fxRate, setFxRate] = useState(278)
+  const [fxRate, setFxRate] = useState<number | null>(null)
 
   useEffect(() => {
     getFxRate().then(setFxRate).catch(() => undefined)

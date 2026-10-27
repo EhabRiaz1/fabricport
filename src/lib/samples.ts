@@ -110,6 +110,22 @@ export async function createSampleRequest({
   address,
   notes,
 }: CreateSampleRequestInput): Promise<SampleRequest> {
+  // The flag is enforced by the sample_request_items insert policy too, but failing
+  // here avoids leaving a request row with no item behind it.
+  const { data: product, error: productError } = await supabase
+    .from('products')
+    .select('sample_available, supplier_id')
+    .eq('id', productId)
+    .maybeSingle()
+  if (productError) throw new Error(productError.message)
+  if (!product) throw new Error('This fabric is no longer available.')
+  if (product.supplier_id !== supplierId) {
+    throw new Error('This fabric does not belong to that supplier.')
+  }
+  if (!product.sample_available) {
+    throw new Error('Samples are not offered for this fabric.')
+  }
+
   const { data: request, error: requestError } = await supabase
     .from('sample_requests')
     .insert({

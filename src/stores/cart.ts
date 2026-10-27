@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { supabase } from '@/lib/supabase'
+import { clampQuantity, quantityBounds } from '@/lib/utils'
 import type { CartItemWithProduct, ProductWithRelations } from '@/types/app'
 
 /**
@@ -18,6 +19,8 @@ export interface GuestLine {
   supplier_name: string | null
   price_min_pkr: number | null
   moq_meters: number | null
+  /** Stock at the time of adding; the upper bound for the quantity stepper. */
+  stock_meters?: number | null
   quantity_meters: number
 }
 
@@ -82,8 +85,12 @@ export const useCartStore = create<CartState>()(
         })
       },
 
-      async add(product, quantityMeters) {
+      async add(product, requestedMeters) {
         const buyerId = get().buyerId
+        // Whole metres, at least the MOQ, never more than the stock. The fabric page
+        // clamps too, but the store is the last line before a row is written.
+        const bounds = quantityBounds(product)
+        const quantityMeters = clampQuantity(requestedMeters, bounds)
 
         if (!buyerId) {
           const existing = get().guestLines.find((l) => l.product_id === product.id)
@@ -91,7 +98,13 @@ export const useCartStore = create<CartState>()(
             guestLines: existing
               ? get().guestLines.map((l) =>
                   l.product_id === product.id
-                    ? { ...l, quantity_meters: l.quantity_meters + quantityMeters }
+                    ? {
+                        ...l,
+                        quantity_meters: clampQuantity(
+                          l.quantity_meters + quantityMeters,
+                          bounds,
+                        ),
+                      }
                     : l,
                 )
               : [
@@ -105,6 +118,7 @@ export const useCartStore = create<CartState>()(
                     supplier_name: product.supplier?.brand_name ?? null,
                     price_min_pkr: product.price_min_pkr,
                     moq_meters: product.moq_meters,
+                    stock_meters: product.stock_meters,
                     quantity_meters: quantityMeters,
                   },
                 ],
@@ -118,7 +132,7 @@ export const useCartStore = create<CartState>()(
         // so adding 200m to a cart that already held 300m left you with 200m -- the toast
         // literally apologised for it. Every other marketplace adds.
         if (existing) {
-          const next = existing.quantity_meters + quantityMeters
+          const next = clampQuantity(existing.quantity_meters + quantityMeters, bounds)
           set({
             lines: get().lines.map((l) =>
               l.product_id === product.id ? { ...l, quantity_meters: next } : l,
@@ -147,17 +161,24 @@ export const useCartStore = create<CartState>()(
         await get().load(buyerId)
       },
 
-      async setQuantity(productId, quantityMeters) {
+      async setQuantity(productId, requestedMeters) {
         const buyerId = get().buyerId
         if (!buyerId) {
           set({
             guestLines: get().guestLines.map((l) =>
-              l.product_id === productId ? { ...l, quantity_meters: quantityMeters } : l,
+              l.product_id === productId
+                ? { ...l, quantity_meters: clampQuantity(requestedMeters, quantityBounds(l)) }
+                : l,
             ),
           })
           return
         }
         const previous = get().lines
+        const current = previous.find((l) => l.product_id === productId)
+        const quantityMeters = clampQuantity(
+          requestedMeters,
+          quantityBounds(current?.product ?? {}),
+        )
         set({
           lines: previous.map((l) =>
             l.product_id === productId ? { ...l, quantity_meters: quantityMeters } : l,

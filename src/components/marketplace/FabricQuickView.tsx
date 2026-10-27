@@ -12,11 +12,10 @@ import { WishlistButton } from '@/components/marketplace/WishlistButton'
 import { VerifiedBadge } from '@/components/ui/badge'
 import {
   cn,
-  formatPrice,
+  formatUnitPrice,
   getProductImageUrl,
   metersToYards,
 } from '@/lib/utils'
-import { convertPrice } from '@/lib/fx'
 import {
   getAvailability,
   getComposition,
@@ -36,7 +35,8 @@ export interface FabricQuickViewProps {
   onOpenChange: (open: boolean) => void
   currency?: Currency
   unit?: Unit
-  fxRate?: number
+  /** USD→PKR. Null while loading: prices show in PKR meanwhile. */
+  fxRate?: number | null
 }
 
 /**
@@ -55,7 +55,7 @@ export function FabricQuickView({
   onOpenChange,
   currency = 'PKR',
   unit = 'meters',
-  fxRate = 278,
+  fxRate = null,
 }: FabricQuickViewProps) {
   const open = product != null
   const [activeImage, setActiveImage] = useState(0)
@@ -76,23 +76,8 @@ export function FabricQuickView({
   const specRows = useMemo<ProductSpecRow[]>(() => {
     if (!product) return []
 
-    const unitSuffix = unit === 'yards' ? '/yd' : '/m'
-    const minPkr = product.price_min_pkr ?? 0
-    const maxPkr = product.price_max_pkr ?? minPkr
-    const min =
-      currency === 'USD'
-        ? product.price_min_usd ?? convertPrice(minPkr, 'PKR', 'USD', fxRate)
-        : minPkr
-    const max =
-      currency === 'USD'
-        ? product.price_max_usd ?? convertPrice(maxPkr, 'PKR', 'USD', fxRate)
-        : maxPkr
-    const price =
-      min === 0
-        ? '—'
-        : min === max || max === 0
-          ? `${formatPrice(min, currency)}${unitSuffix}`
-          : `${formatPrice(min, currency)} – ${formatPrice(max, currency)}${unitSuffix}`
+    // Per-yard conversion, live USD rate and the approval gate all live in the helper.
+    const price = formatUnitPrice(product, currency, unit, fxRate) ?? '—'
 
     const stock =
       unit === 'yards'

@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom'
 import { Box } from 'lucide-react'
 import {
   cn,
-  formatPrice,
+  formatUnitPrice,
   getProductImageUrl,
   metersToYards,
 } from '@/lib/utils'
@@ -16,37 +16,30 @@ import {
   getWeaveOrKnit,
   getWidth,
 } from '@/lib/product-specs'
-import { convertPrice } from '@/lib/fx'
 import { WishlistButton } from '@/components/marketplace/WishlistButton'
 import type { FabricCardProps } from '@/types/app'
 
+/**
+ * Price text for a card. Per-yard conversion, live USD rate and the approval gate all
+ * live in `formatUnitPrice`; this only supplies the dash for a product with no price.
+ */
 function formatProductPrice(
   product: FabricCardProps['product'],
-  currency: FabricCardProps['currency'],
-  fxRate: number,
+  currency: NonNullable<FabricCardProps['currency']>,
+  unit: NonNullable<FabricCardProps['unit']>,
+  fxRate: number | null | undefined,
 ): string {
-  const minPkr = product.price_min_pkr ?? 0
-  const maxPkr = product.price_max_pkr ?? minPkr
-  const minUsd = product.price_min_usd ?? convertPrice(minPkr, 'PKR', 'USD', fxRate)
-  const maxUsd = product.price_max_usd ?? convertPrice(maxPkr, 'PKR', 'USD', fxRate)
-
-  const min = currency === 'USD' ? minUsd : minPkr
-  const max = currency === 'USD' ? maxUsd : maxPkr
-
-  if (min === 0) return '—'
-  if (min === max || max === 0) return formatPrice(min, currency)
-  return `${formatPrice(min, currency)} – ${formatPrice(max, currency)}`
+  return formatUnitPrice(product, currency, unit, fxRate) ?? '—'
 }
 
 /* ------------------------------------------------------------------ */
 /* Compact variant — horizontal list row                               */
 /* ------------------------------------------------------------------ */
-function CompactCard({ product, currency = 'PKR', unit = 'meters', fxRate = 278, className }: FabricCardProps) {
+function CompactCard({ product, currency = 'PKR', unit = 'meters', fxRate = null, className }: FabricCardProps) {
   const imageUrl = product.images[0]
     ? getProductImageUrl(product.images[0], { variant: 'card' })
     : null
-  const priceValue = formatProductPrice(product, currency, fxRate)
-  const unitSuffix = unit === 'yards' ? '/yd' : '/m'
+  const priceValue = formatProductPrice(product, currency, unit, fxRate)
   const stock = unit === 'yards'
     ? `${metersToYards(product.stock_meters).toFixed(0)} yd`
     : `${product.stock_meters.toFixed(0)} m`
@@ -79,7 +72,7 @@ function CompactCard({ product, currency = 'PKR', unit = 'meters', fxRate = 278,
         )}
       </div>
       <div className="shrink-0 text-right">
-        <p className="font-mono text-xs text-text-secondary">{priceValue}{unitSuffix}</p>
+        <p className="font-mono text-xs text-text-secondary">{priceValue}</p>
         <p className="mt-0.5 font-mono text-[9px] uppercase tracking-widest text-text-muted">{stock}</p>
       </div>
       {product.color_hex && (
@@ -167,7 +160,7 @@ function FabricCardComponent({
   variant = 'grid',
   currency = 'PKR',
   unit = 'meters',
-  fxRate = 278,
+  fxRate = null,
   onAddToCart,
   className,
   imagePriority = false,
@@ -181,8 +174,7 @@ function FabricCardComponent({
     <CompactCard product={product} variant={variant} currency={currency} unit={unit} fxRate={fxRate} onAddToCart={onAddToCart} className={className} />
   )
 
-  const priceValue = formatProductPrice(product, currency, fxRate)
-  const unitSuffix = unit === 'yards' ? '/yd' : '/m'
+  const priceValue = formatProductPrice(product, currency, unit, fxRate)
   // All spec reads go through lib/product-specs so the card, the quick-view modal and the
   // detail page cannot drift apart on fallback order again.
   const gsm = getGsmLabelShort(product)
@@ -421,32 +413,37 @@ function FabricCardComponent({
 
           <div className="h-px bg-[#C8C4BC]" />
 
-          <div className="grid grid-cols-2 divide-x divide-[#C8C4BC]">
-            <div className={cn(isGrid ? 'px-3 py-2' : 'px-5 py-3')}>
-              <p className="font-mono text-[7px] font-semibold uppercase tracking-[0.18em] text-text-dark sm:text-[8px]">
-                PRICE
-              </p>
-              <p className="mt-0.5 truncate font-mono text-[10px] text-text-dark-secondary sm:text-xs">
-                {priceValue}{unitSuffix}
-              </p>
-            </div>
-            <div className={cn(isGrid ? 'px-3 py-2' : 'px-5 py-3')}>
-              <p className="font-mono text-[7px] font-semibold uppercase tracking-[0.18em] text-text-dark sm:text-[8px]">
-                WEAVE
-              </p>
-              <p className="mt-0.5 truncate font-mono text-[10px] text-text-dark-secondary sm:text-xs">
-                {weave ?? '—'}
-              </p>
-            </div>
+          {/* Price on its own full-width row. In a half-width cell at 1280px a range such
+              as "PKR 4,882 – PKR 5,200/yd" truncated to "PKR 4,882…", which is the one
+              number on the card a buyer actually needs. Weave moves to the next row. */}
+          <div className={cn(isGrid ? 'px-3 py-2' : 'px-5 py-3')}>
+            <p className="font-mono text-[7px] font-semibold uppercase tracking-[0.18em] text-text-dark sm:text-[8px]">
+              PRICE
+            </p>
+            <p className="mt-0.5 truncate font-mono text-[10px] tabular-nums text-text-dark-secondary sm:text-xs">
+              {priceValue}
+            </p>
+          </div>
+
+          <div className="h-px bg-[#C8C4BC]" />
+
+          <div className={cn(isGrid ? 'px-3 py-2' : 'px-5 py-3')}>
+            <p className="font-mono text-[7px] font-semibold uppercase tracking-[0.18em] text-text-dark sm:text-[8px]">
+              WEAVE
+            </p>
+            <p className="mt-0.5 truncate font-mono text-[10px] text-text-dark-secondary sm:text-xs">
+              {weave ?? '—'}
+            </p>
           </div>
 
           {/* Fabric type + composition, as the legacy card printed them. Fixed height in
-              grid so a two-word composition and a twenty-word one give the same card. */}
+              grid so a two-word composition and a twenty-word one give the same card:
+              two lines are reserved whether or not the text needs them. */}
           {isGrid && (
             <>
               <div className="h-px bg-[#C8C4BC]" />
               <div className="px-3 py-2">
-                <p className="h-[14px] truncate font-mono text-[10px] leading-[14px] text-text-dark-secondary">
+                <p className="h-[28px] line-clamp-2 font-mono text-[10px] leading-[14px] text-text-dark-secondary">
                   {typeAndComposition || '—'}
                 </p>
               </div>
@@ -461,7 +458,7 @@ function FabricCardComponent({
                   <p className="font-mono text-[8px] font-semibold uppercase tracking-[0.18em] text-text-dark">
                     CONTENT
                   </p>
-                  <p className="mt-0.5 font-mono text-xs leading-tight text-text-dark-secondary line-clamp-1">
+                  <p className="mt-0.5 font-mono text-xs leading-tight text-text-dark-secondary line-clamp-2">
                     {typeAndComposition || '—'}
                   </p>
                 </div>

@@ -10,7 +10,7 @@ import { usePreferencesStore } from '@/stores/preferences'
 interface FeaturedFabricsProps {
   products?: FeaturedProduct[]
   loading?: boolean
-  fxRate?: number
+  fxRate?: number | null
   className?: string
 }
 
@@ -34,7 +34,7 @@ function SkeletonCard() {
 export function FeaturedFabrics({
   products = [],
   loading = false,
-  fxRate = 278,
+  fxRate = null,
   className,
 }: FeaturedFabricsProps) {
   const { currency, unit } = usePreferencesStore()

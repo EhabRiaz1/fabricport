@@ -8,9 +8,17 @@ import { Textarea } from '@/components/ui/textarea'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useProfile } from '@/hooks/useProfile'
 import { useCartStore } from '@/stores/cart'
-import { createInquiry } from '@/lib/inquiries'
-import { dispatchNotification } from '@/lib/notifications'
-import { formatPrice, getProductImageUrl } from '@/lib/utils'
+import { submitCartInquiries } from '@/lib/cart'
+import {
+  clampQuantity,
+  formatPrice,
+  formatUnitPrice,
+  getProductImageUrl,
+  quantityBounds,
+  quantityIssue,
+} from '@/lib/utils'
+import { useFxRate } from '@/lib/fx'
+import { usePreferencesStore } from '@/stores/preferences'
 import { toast } from '@/stores/toast'
 import type { CartGroupBySupplier } from '@/types/app'
 
@@ -24,6 +32,8 @@ function groupEstimate(group: CartGroupBySupplier): number {
 export default function CartPage() {
   const { profile } = useProfile()
   const navigate = useNavigate()
+  const { currency, unit } = usePreferencesStore()
+  const fxRate = useFxRate()
   /**
    * Reads from the shared cart store rather than its own fetch.
    *
@@ -113,50 +123,24 @@ export default function CartPage() {
     setSubmitting(true)
     setError(null)
 
-    let sent = 0
-    try {
-      for (const group of groups) {
-        // One RPC == one transaction: the inquiry, its items and the cart cleanup
-        // either all land or none do. Buyers have no DELETE policy on `inquiries`,
-        // so a client-side multi-step version cannot clean up after itself.
-        const inquiryId = await createInquiry({
-          supplierId: group.supplier.id,
-          lines: group.items.map((item) => ({
-            product_id: item.product_id,
-            quantity_meters: item.quantity_meters,
-            notes: item.notes,
-          })),
-          cartItemIds: group.items.map((item) => item.id),
-        })
-        sent += 1
+    // Shared with the nav drawer (src/lib/cart.ts): one RPC per supplier group, each
+    // its own transaction, with the opening chat message composed server-side.
+    const result = await submitCartInquiries(profile, groups)
+    setSubmitting(false)
 
-        // Fan-out only (WhatsApp/email). The inquiry itself is already committed.
-        dispatchNotification({
-          userId: group.supplier.id,
-          type: 'inquiry_received',
-          title: 'New inquiry received',
-          body: `${profile.company_name ?? profile.full_name ?? 'A buyer'} sent an inquiry for ${group.items.length} fabric${group.items.length === 1 ? '' : 's'}.`,
-          data: { inquiry_id: inquiryId },
-        }).catch(() => undefined)
-      }
-
-      toast.success(
-        groups.length === 1 ? 'Inquiry sent' : `${groups.length} inquiries sent`,
-        'Suppliers have been notified and will respond in your inbox.',
-      )
-      navigate('/buyer/inquiries')
-    } catch (err) {
+    if (result.error) {
       // Each group is its own transaction, so an earlier group may have committed.
       // Re-read the cart rather than leaving the list showing already-sent items.
-      setError(
-        `${err instanceof Error ? err.message : 'Failed to submit inquiries'}${
-          sent > 0 ? ` (${sent} of ${groups.length} inquiries were sent)` : ''
-        }`,
-      )
+      setError(result.error)
       await loadCart()
-    } finally {
-      setSubmitting(false)
+      return
     }
+
+    toast.success(
+      result.total === 1 ? 'Inquiry sent' : `${result.total} inquiries sent`,
+      'Suppliers have been notified and will respond in your inbox.',
+    )
+    navigate('/buyer/inquiries')
   }
 
   if (loading) {
@@ -277,9 +261,9 @@ export default function CartPage() {
                         {item.product.color_display_name}
                       </p>
                     )}
-                    {item.product.price_min_pkr != null && (
+                    {formatUnitPrice(item.product, currency, unit, fxRate) && (
                       <p className="mt-1 font-mono text-[10px] text-text-dark-secondary">
-                        {formatPrice(item.product.price_min_pkr, 'PKR')}/m
+                        {formatUnitPrice(item.product, currency, unit, fxRate)}
                       </p>
                     )}
                   </div>
@@ -287,16 +271,10 @@ export default function CartPage() {
                     <label className="mb-1 block font-mono text-[10px] uppercase tracking-widest text-text-dark-secondary">
                       Qty (m)
                     </label>
-                    <Input
-                      type="number"
-                      min={1}
+                    <QuantityField
                       value={item.quantity_meters}
-                      onChange={(e) =>
-                        updateItem(item.id, {
-                          quantity_meters: Math.max(1, Number(e.target.value) || 1),
-                        })
-                      }
-                      className="border-border-cream bg-card text-text-dark"
+                      bounds={quantityBounds(item.product)}
+                      onCommit={(q) => updateItem(item.id, { quantity_meters: q })}
                     />
                   </div>
                   <div>
@@ -325,5 +303,67 @@ export default function CartPage() {
         ))
       )}
     </div>
+  )
+}
+
+/**
+ * Whole metres between the MOQ and the stock. Typing is kept local and committed on
+ * blur / Enter, clamped to the bounds: clamping each keystroke turned "1500" into the
+ * MOQ after the first digit. The message explains a value that will be adjusted.
+ */
+function QuantityField({
+  value,
+  bounds,
+  onCommit,
+}: {
+  value: number
+  bounds: { min: number; max: number | null }
+  onCommit: (quantity: number) => void
+}) {
+  const [draft, setDraft] = useState(String(value))
+  useEffect(() => setDraft(String(value)), [value])
+
+  const typed = Number(draft)
+  const issue = quantityIssue(typed, bounds)
+
+  function commit() {
+    const next = clampQuantity(typed, bounds)
+    setDraft(String(next))
+    if (next !== value) onCommit(next)
+  }
+
+  return (
+    <>
+      <Input
+        type="number"
+        inputMode="numeric"
+        min={bounds.min}
+        max={bounds.max ?? undefined}
+        step={1}
+        value={draft}
+        aria-invalid={issue != null}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') commit()
+        }}
+        className={
+          issue
+            ? 'border-danger bg-card text-text-dark'
+            : 'border-border-cream bg-card text-text-dark'
+        }
+      />
+      <p
+        className={`mt-1 font-mono text-[9px] uppercase tracking-[0.12em] ${
+          issue ? 'text-danger' : 'text-text-dark-secondary'
+        }`}
+        aria-live="polite"
+      >
+        {issue ??
+          `Min ${bounds.min.toLocaleString('en-PK')} m${
+            bounds.max != null ? ` · ${bounds.max.toLocaleString('en-PK')} m in stock` : ''
+          }`}
+      </p>
+    </>
   )
 }

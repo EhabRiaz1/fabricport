@@ -175,6 +175,7 @@ export interface Database {
           phone_numbers: PhoneNumber[]
           whatsapp_numbers: WhatsappNumber[]
           status: ProfileStatus
+          is_demo: boolean
           overdue_flagged: boolean
           overdue_flagged_at: string | null
           created_at: string
@@ -199,6 +200,7 @@ export interface Database {
           phone_numbers?: PhoneNumber[]
           whatsapp_numbers?: WhatsappNumber[]
           status?: ProfileStatus
+          is_demo?: boolean
           overdue_flagged?: boolean
           overdue_flagged_at?: string | null
           created_at?: string
@@ -1681,6 +1683,7 @@ export interface Database {
           p_supplier_id: string
           p_lines: { product_id: string; quantity_meters: number; notes: string | null }[]
           p_cart_item_ids?: string[] | null
+          p_message?: string | null
         }
         /** the new inquiry id */
         Returns: string

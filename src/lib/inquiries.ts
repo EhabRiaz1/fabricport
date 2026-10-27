@@ -42,6 +42,11 @@ export interface CreateInquiryInput {
   lines: InquiryLineInput[]
   /** cart_items rows to clear in the same transaction; omit for a direct inquiry. */
   cartItemIds?: string[]
+  /**
+   * Opening chat message. When omitted the RPC composes one from the lines
+   * (fabric, quantity, notes) so the supplier never sees an empty thread.
+   */
+  message?: string | null
 }
 
 /**
@@ -58,6 +63,7 @@ export async function createInquiry({
   supplierId,
   lines,
   cartItemIds,
+  message,
 }: CreateInquiryInput): Promise<string> {
   const { data, error } = await supabase.rpc('create_inquiry', {
     p_supplier_id: supplierId,
@@ -67,6 +73,7 @@ export async function createInquiry({
       notes: line.notes ?? null,
     })),
     p_cart_item_ids: cartItemIds ?? null,
+    p_message: message?.trim() ? message.trim() : null,
   })
 
   if (error) throw new Error(error.message)

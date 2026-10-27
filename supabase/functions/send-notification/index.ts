@@ -110,6 +110,17 @@ Deno.serve(async (req) => {
       auth: { autoRefreshToken: false, persistSession: false },
     })
 
+    // Caller must be a signed-in user. Without this anyone holding the anon key
+    // could push WhatsApp / email to any user id.
+    const authHeader = req.headers.get('Authorization') ?? ''
+    const token = authHeader.replace('Bearer ', '')
+    if (!token) return json({ ok: false, error: 'Missing authorization' }, 401)
+    const { data: callerData, error: callerError } = await admin.auth.getUser(token)
+    if (callerError || !callerData.user) {
+      return json({ ok: false, error: 'Invalid session' }, 401)
+    }
+    const callerId = callerData.user.id
+
     const payload = (await req.json()) as NotificationRequest
     if (!payload.userId || !payload.type || !payload.title) {
       return json({ ok: false, error: 'userId, type and title are required' }, 400)
@@ -123,7 +134,7 @@ Deno.serve(async (req) => {
         type: payload.type,
         title: payload.title,
         body: payload.body ?? null,
-        data: payload.data ?? null,
+        data: { ...(payload.data ?? {}), triggered_by: callerId },
       })
       .select()
       .single()
@@ -182,7 +193,7 @@ Deno.serve(async (req) => {
     }
 
     // 4. Email fan-out
-    const email = authUser?.data?.user?.email
+    const email = authUser?.user?.email
     if (wantEmail && email) {
       const emailResult = await sendEmail(
         email,

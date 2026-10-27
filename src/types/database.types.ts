@@ -1732,6 +1732,18 @@ export interface Database {
           oldest_due_date: string | null
         }[]
       }
+      get_buyer_directory: {
+        Args: Record<string, never>
+        Returns: {
+          id: string
+          full_name: string | null
+          company_name: string | null
+          email: string | null
+          is_demo: boolean
+          status: string
+          created_at: string
+        }[]
+      }
       get_counterparty_profiles: {
         Args: Record<string, never>
         Returns: { id: string; full_name: string | null; company_name: string | null }[]

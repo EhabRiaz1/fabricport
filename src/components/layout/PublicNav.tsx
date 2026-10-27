@@ -105,6 +105,7 @@ export function PublicNav({ className }: PublicNavProps) {
         <div className="flex items-center gap-4">
           <Link
             to={portalHref}
+            state={isAuthenticated ? undefined : { from: location.pathname + location.search }}
             className={cn(
               'hidden font-mono text-[10px] uppercase tracking-[0.18em] transition-colors hover:text-accent md:block',
               solid ? 'text-[#3C2A1A]/55' : 'text-white/60',

@@ -18,8 +18,13 @@ const SupplierPage = lazy(() => import('@/pages/public/SupplierPage'))
 const VendorsPage = lazy(() => import('@/pages/public/VendorsPage'))
 const SellPage = lazy(() => import('@/pages/public/SellPage'))
 const CataloguePage = lazy(() => import('@/pages/public/CataloguePage'))
+const PrivacyPage = lazy(() => import('@/pages/public/PrivacyPage'))
+const TermsPage = lazy(() => import('@/pages/public/TermsPage'))
+const NotFoundPage = lazy(() => import('@/pages/public/NotFoundPage'))
 const LoginPage = lazy(() => import('@/pages/auth/LoginPage'))
 const RegisterPage = lazy(() => import('@/pages/auth/RegisterPage'))
+const ForgotPasswordPage = lazy(() => import('@/pages/auth/ForgotPasswordPage'))
+const ResetPasswordPage = lazy(() => import('@/pages/auth/ResetPasswordPage'))
 const PendingPage = lazy(() => import('@/pages/auth/PendingPage'))
 const DashboardPage = lazy(() => import('@/pages/admin/DashboardPage'))
 const ProductsPage = lazy(() => import('@/pages/admin/ProductsPage'))
@@ -101,17 +106,6 @@ function useStaleChunkRecovery() {
   }, [])
 }
 
-function PortalPlaceholder({ title }: { title: string }) {
-  return (
-    <div className="flex min-h-[40vh] flex-col items-center justify-center text-center">
-      <p className="font-mono text-[10px] uppercase tracking-widest text-text-muted">
-        {title}
-      </p>
-      <p className="mt-2 text-sm text-text-secondary">Coming soon</p>
-    </div>
-  )
-}
-
 export default function App() {
   useStaleChunkRecovery()
 
@@ -132,6 +126,8 @@ export default function App() {
             <Route path="/supplier/:slug" element={<SupplierPage />} />
             <Route path="/vendors" element={<VendorsPage />} />
             <Route path="/c/:token" element={<CataloguePage />} />
+            <Route path="/privacy" element={<PrivacyPage />} />
+            <Route path="/terms" element={<TermsPage />} />
             <Route
               path="/private-portal/:slug?"
               element={
@@ -142,6 +138,8 @@ export default function App() {
             />
             <Route path="/auth/login" element={<LoginPage />} />
             <Route path="/auth/register" element={<RegisterPage />} />
+            <Route path="/auth/forgot-password" element={<ForgotPasswordPage />} />
+            <Route path="/auth/reset-password" element={<ResetPasswordPage />} />
             <Route
               path="/auth/pending"
               element={
@@ -173,7 +171,12 @@ export default function App() {
               <Route path="invoices/:id" element={<BuyerInvoiceDetailPage />} />
               <Route path="support" element={<SupportPage />} />
               <Route path="settings" element={<BuyerSettingsPage />} />
-              <Route path="*" element={<PortalPlaceholder title="Buyer Portal" />} />
+              <Route
+                path="*"
+                element={
+                  <NotFoundPage embedded homeHref="/buyer/dashboard" homeLabel="Buyer dashboard" />
+                }
+              />
             </Route>
 
             <Route
@@ -209,7 +212,16 @@ export default function App() {
               <Route path="invoices/new" element={<InvoiceBuilderPage />} />
               <Route path="support" element={<SupportPage />} />
               <Route path="settings" element={<SupplierSettingsPage />} />
-              <Route path="*" element={<PortalPlaceholder title="Supplier Portal" />} />
+              <Route
+                path="*"
+                element={
+                  <NotFoundPage
+                    embedded
+                    homeHref="/supplier-portal/dashboard"
+                    homeLabel="Supplier dashboard"
+                  />
+                }
+              />
             </Route>
 
             <Route
@@ -241,10 +253,15 @@ export default function App() {
               <Route path="inquiries" element={<InquiriesPage />} />
               <Route path="inquiries/:id" element={<InquiryDetailPage />} />
               <Route path="settings" element={<SettingsPage />} />
-              <Route path="*" element={<Navigate to="dashboard" replace />} />
+              <Route
+                path="*"
+                element={
+                  <NotFoundPage embedded homeHref="/admin/dashboard" homeLabel="Admin dashboard" />
+                }
+              />
             </Route>
 
-            <Route path="*" element={<Navigate to="/" replace />} />
+            <Route path="*" element={<NotFoundPage />} />
           </Routes>
           </Suspense>
         </SmoothScroll>

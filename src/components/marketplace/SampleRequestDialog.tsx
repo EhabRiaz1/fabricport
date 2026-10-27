@@ -131,8 +131,8 @@ export function SampleRequestDialog({
         <DialogHeader>
           <DialogTitle>Request a sample</DialogTitle>
           <DialogDescription>
-            A physical swatch of {product.title} posted to you by{' '}
-            {product.supplier?.brand_name ?? 'the supplier'}.
+            Ask {product.supplier?.brand_name ?? 'the supplier'} for a physical swatch of{' '}
+            {product.title}. The mill reviews each request before posting it.
           </DialogDescription>
         </DialogHeader>
 

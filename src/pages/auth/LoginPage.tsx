@@ -81,7 +81,15 @@ export default function LoginPage() {
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="password">Password</Label>
+          <div className="flex items-center justify-between">
+            <Label htmlFor="password">Password</Label>
+            <Link
+              to="/auth/forgot-password"
+              className="text-xs font-medium text-bronze hover:text-accent"
+            >
+              Forgot password?
+            </Link>
+          </div>
           <Input
             id="password"
             type="password"
@@ -102,7 +110,11 @@ export default function LoginPage() {
 
       <p className="mt-8 text-center text-sm text-text-secondary">
         New to FabricPort?{' '}
-        <Link to="/auth/register" className="font-medium text-bronze hover:text-accent">
+        <Link
+          to="/auth/register"
+          state={from ? { from } : undefined}
+          className="font-medium text-bronze hover:text-accent"
+        >
           Create an account
         </Link>
       </p>

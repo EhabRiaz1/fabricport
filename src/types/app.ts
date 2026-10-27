@@ -46,7 +46,8 @@ export interface FabricCardProps {
   variant?: FabricCardVariant
   currency?: Currency
   unit?: Unit
-  fxRate?: number
+  /** USD→PKR. Null/undefined while loading: the card then shows PKR. */
+  fxRate?: number | null
   onAddToCart?: (productId: string) => void
   className?: string
   /** Eager-load grid thumbnail (first page above the fold). */
@@ -308,6 +309,8 @@ export interface InvoiceBuilderLineItem {
   qty: number
   unit_price_pkr: number
   unit_price_usd: number
+  /** Per-line rate, used only when the invoice taxes per line. */
+  tax_rate_percent?: number | null
 }
 
 export interface SearchSuggestion {

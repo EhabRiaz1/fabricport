@@ -179,8 +179,18 @@ export default function SupplierSampleRequestDetailPage() {
                     placeholder="Tracking number *"
                     value={tracking}
                     disabled={saving}
+                    aria-invalid={!tracking.trim()}
+                    aria-describedby="tracking-help"
                     onChange={(e) => setTracking(e.target.value)}
                   />
+                  <p
+                    id="tracking-help"
+                    className={`text-xs ${tracking.trim() ? 'text-text-dark-secondary' : 'text-destructive'}`}
+                  >
+                    {tracking.trim()
+                      ? 'The buyer sees the courier and tracking number once shipped.'
+                      : 'Tracking number is required before you can mark this shipped.'}
+                  </p>
                 </div>
               )}
 
@@ -191,7 +201,12 @@ export default function SupplierSampleRequestDetailPage() {
                       key={next}
                       size="sm"
                       variant={next === 'declined' ? 'outline' : 'default'}
-                      disabled={saving}
+                      disabled={saving || (next === 'shipped' && !tracking.trim())}
+                      title={
+                        next === 'shipped' && !tracking.trim()
+                          ? 'Add a tracking number first'
+                          : undefined
+                      }
                       onClick={() => advance(next)}
                     >
                       {next === 'declined' ? 'Decline' : `Mark ${SAMPLE_STATUS_LABELS[next]}`}

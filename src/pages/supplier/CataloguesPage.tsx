@@ -120,6 +120,15 @@ export default function SupplierCataloguesPage() {
     setMemberIds(new Set((membersRes.data ?? []).map((r) => r.product_id)))
   }
 
+  /** Keeps the "N fabrics" line on the list in step with the picker, without a reload. */
+  function bumpCount(catalogueId: string, delta: number) {
+    setCatalogues((prev) =>
+      prev.map((c) =>
+        c.id === catalogueId ? { ...c, product_count: Math.max(0, c.product_count + delta) } : c,
+      ),
+    )
+  }
+
   async function toggleMember(productId: string) {
     if (!managing) return
     const isMember = memberIds.has(productId)
@@ -130,6 +139,7 @@ export default function SupplierCataloguesPage() {
       else next.add(productId)
       return next
     })
+    bumpCount(managing.id, isMember ? -1 : 1)
     const { error } = isMember
       ? await supabase
           .from('catalogue_products')
@@ -148,6 +158,7 @@ export default function SupplierCataloguesPage() {
         else next.delete(productId)
         return next
       })
+      bumpCount(managing.id, isMember ? 1 : -1)
     }
   }
 

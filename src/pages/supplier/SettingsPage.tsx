@@ -1,10 +1,13 @@
 import { useEffect, useState, type FormEvent } from 'react'
+import { ChangePasswordCard } from '@/components/shared/ChangePasswordCard'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useProfile } from '@/hooks/useProfile'
+import { normalizePhone, phoneError } from '@/lib/phone'
 import { supabase } from '@/lib/supabase'
+import { toast } from '@/stores/toast'
 import type { SupplierNotificationSettings } from '@/types/database.types'
 
 const DEFAULT_NOTIFICATION_SETTINGS: SupplierNotificationSettings = {
@@ -13,7 +16,8 @@ const DEFAULT_NOTIFICATION_SETTINGS: SupplierNotificationSettings = {
 }
 
 export default function SupplierSettingsPage() {
-  const { profile, refreshProfile } = useProfile()
+  const { profile, user, refreshProfile } = useProfile()
+  const accountEmail = user?.email ?? ''
   const [fullName, setFullName] = useState(profile?.full_name ?? '')
   const [companyName, setCompanyName] = useState(profile?.company_name ?? '')
   const [phone, setPhone] = useState(profile?.phone_numbers?.[0]?.number ?? '')
@@ -51,23 +55,34 @@ export default function SupplierSettingsPage() {
     loadSupplier()
   }, [profile?.id])
 
+  const phoneProblem = phoneError(phone, 'Phone number')
+  const whatsappProblem = phoneError(whatsapp, 'WhatsApp number')
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
     if (!profile?.id) return
+    if (phoneProblem || whatsappProblem) {
+      const problem = phoneProblem ?? whatsappProblem ?? 'Invalid phone number'
+      setError(problem)
+      toast.error('Check the phone numbers', problem)
+      return
+    }
 
     setSaving(true)
     setMessage(null)
     setError(null)
 
+    const phoneValue = normalizePhone(phone)
+    const whatsappValue = normalizePhone(whatsapp)
     const [profileRes, supplierRes] = await Promise.all([
       supabase
         .from('profiles')
         .update({
           full_name: fullName.trim() || null,
           company_name: companyName.trim() || null,
-          phone_numbers: phone.trim() ? [{ label: 'primary', number: phone.trim() }] : [],
-          whatsapp_numbers: whatsapp.trim()
-            ? [{ label: 'primary', number: whatsapp.trim(), primary: true }]
+          phone_numbers: phoneValue ? [{ label: 'primary', number: phoneValue }] : [],
+          whatsapp_numbers: whatsappValue
+            ? [{ label: 'primary', number: whatsappValue, primary: true }]
             : [],
         })
         .eq('id', profile.id),
@@ -82,9 +97,12 @@ export default function SupplierSettingsPage() {
     ])
 
     if (profileRes.error || supplierRes.error) {
-      setError(profileRes.error?.message ?? supplierRes.error?.message ?? 'Update failed')
+      const problem = profileRes.error?.message ?? supplierRes.error?.message ?? 'Update failed'
+      setError(problem)
+      toast.error('Could not save settings', problem)
     } else {
       setMessage('Settings saved successfully.')
+      toast.success('Settings saved')
       await refreshProfile()
     }
     setSaving(false)
@@ -120,6 +138,22 @@ export default function SupplierSettingsPage() {
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-4">
               <div className="space-y-2">
+                <Label htmlFor="accountEmail" className="text-text-dark">
+                  Account Email
+                </Label>
+                <Input
+                  id="accountEmail"
+                  type="email"
+                  value={accountEmail}
+                  readOnly
+                  disabled
+                  className="border-border-cream bg-card-hover text-text-dark-secondary"
+                />
+                <p className="text-xs text-text-dark-secondary">
+                  This is the email you sign in with. Contact support to change it.
+                </p>
+              </div>
+              <div className="space-y-2">
                 <Label htmlFor="fullName" className="text-text-dark">
                   Full Name
                 </Label>
@@ -152,8 +186,10 @@ export default function SupplierSettingsPage() {
                     placeholder="+92 300 0000000"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
+                    aria-invalid={Boolean(phoneProblem)}
                     className="border-border-cream bg-card-hover text-text-dark"
                   />
+                  {phoneProblem && <p className="text-xs text-danger">{phoneProblem}</p>}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="whatsapp" className="text-text-dark">
@@ -165,8 +201,10 @@ export default function SupplierSettingsPage() {
                     placeholder="+92 300 0000000"
                     value={whatsapp}
                     onChange={(e) => setWhatsapp(e.target.value)}
+                    aria-invalid={Boolean(whatsappProblem)}
                     className="border-border-cream bg-card-hover text-text-dark"
                   />
+                  {whatsappProblem && <p className="text-xs text-danger">{whatsappProblem}</p>}
                 </div>
               </div>
               <div className="space-y-2">
@@ -229,12 +267,14 @@ export default function SupplierSettingsPage() {
             {message && <p className="text-sm text-success">{message}</p>}
             {error && <p className="text-sm text-danger">{error}</p>}
 
-            <Button type="submit" disabled={saving}>
+            <Button type="submit" disabled={saving || Boolean(phoneProblem || whatsappProblem)}>
               {saving ? 'Saving…' : 'Save Settings'}
             </Button>
           </form>
         </CardContent>
       </Card>
+
+      {accountEmail && <ChangePasswordCard email={accountEmail} />}
     </div>
   )
 }

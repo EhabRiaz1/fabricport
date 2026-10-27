@@ -55,6 +55,12 @@ export interface SubmitResult {
 export async function submitCartInquiries(
   profile: InquirySender,
   groups: CartGroupBySupplier[],
+  /**
+   * Optional note from the buyer, sent as the opening chat message of every inquiry.
+   * When empty the RPC composes one from the lines (fabric, quantity, notes), so the
+   * supplier never opens an empty thread.
+   */
+  message?: string | null,
 ): Promise<SubmitResult> {
   let sent = 0
   try {
@@ -67,6 +73,7 @@ export async function submitCartInquiries(
           notes: item.notes,
         })),
         cartItemIds: group.items.map((item) => item.id),
+        message: message ?? null,
       })
       sent += 1
 

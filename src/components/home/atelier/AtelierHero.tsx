@@ -4,6 +4,8 @@ import { ArrowDown } from 'lucide-react'
 import { gsap, ScrollTrigger, prefersReducedMotion } from '@/lib/gsap'
 import { supabase } from '@/lib/supabase'
 import { getFxRate } from '@/lib/fx'
+import { fetchSuppliers } from '@/hooks/useSuppliers'
+import { pluralize } from '@/lib/text'
 import { FabricClothCanvas } from './FabricClothCanvas'
 
 interface HeroStats {
@@ -23,21 +25,22 @@ export function AtelierHero() {
   useEffect(() => {
     let cancelled = false
     async function load() {
-      const [productsRes, suppliersRes, rate] = await Promise.all([
+      const [productsRes, mills, rate] = await Promise.all([
         supabase
           .from('products')
           .select('id', { count: 'exact', head: true })
-          .eq('status', 'published'),
-        supabase
-          .from('suppliers')
-          .select('id', { count: 'exact', head: true })
-          .eq('is_verified', true),
+          .eq('status', 'published')
+          .eq('visibility', 'public'),
+        // Only mills with at least one public published fabric count as "verified mills".
+        fetchSuppliers({ verifiedOnly: true, requireProducts: true })
+          .then((rows) => rows.length)
+          .catch(() => null),
         getFxRate().catch(() => null),
       ])
       if (cancelled) return
       setStats({
         fabrics: productsRes.count ?? null,
-        mills: suppliersRes.count ?? null,
+        mills,
         fxRate: rate,
       })
     }
@@ -106,8 +109,8 @@ export function AtelierHero() {
   }, [])
 
   const ticker = [
-    stats.fabrics != null ? `${stats.fabrics} fabrics listed` : 'Live catalogue',
-    stats.mills != null ? `${stats.mills} verified mills` : 'Verified mills',
+    stats.fabrics != null ? `${pluralize(stats.fabrics, 'fabric')} listed` : 'Live catalogue',
+    stats.mills != null ? pluralize(stats.mills, 'verified mill') : 'Verified mills',
     stats.fxRate != null ? `USD/PKR ${Math.round(stats.fxRate)}` : 'Live FX',
     'Lahore · Karachi · Faisalabad',
   ]

@@ -35,6 +35,18 @@ export function trackSupplierView(input: {
     })
 }
 
+/**
+ * "Recently viewed" for the buyer dashboard. Server-side upsert on
+ * (user_id, product_id); a no-op for signed-out visitors. Fire-and-forget.
+ */
+export function trackRecentView(productId: string): void {
+  supabase
+    .rpc('record_recent_view', { p_product: productId })
+    .then(({ error }) => {
+      if (error) console.warn('recent view tracking failed:', error.message)
+    })
+}
+
 export interface PresenceMeta {
   path: string
   /** Supplier whose catalogue/product is being viewed, if any. */

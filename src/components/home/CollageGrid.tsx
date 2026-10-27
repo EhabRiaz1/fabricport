@@ -4,13 +4,13 @@ import { motion, useInView, useScroll, useTransform } from 'framer-motion'
 import { ArrowUpRight, Sparkles, Shield, Zap } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { FeaturedProduct } from '@/types/app'
-import { getProductImageUrl, formatPrice } from '@/lib/utils'
+import { getProductImageUrl, formatUnitPrice } from '@/lib/utils'
 import { usePreferencesStore } from '@/stores/preferences'
 
 interface CollageGridProps {
   products?: FeaturedProduct[]
   loading?: boolean
-  fxRate?: number
+  fxRate?: number | null
   className?: string
 }
 
@@ -28,7 +28,7 @@ function ProductCard({
   inView: boolean
   currency: 'PKR' | 'USD'
   unit: 'meters' | 'yards'
-  fxRate: number
+  fxRate: number | null
   variant?: 'default' | 'featured' | 'tall'
 }) {
   const imageUrl = product.images[0]
@@ -36,10 +36,7 @@ function ProductCard({
         variant: variant === 'featured' ? 'medium' : 'card',
       })
     : undefined
-  const priceMin = currency === 'USD' 
-    ? (product.price_min_usd ?? (product.price_min_pkr ?? 0) / fxRate)
-    : (product.price_min_pkr ?? 0)
-  const displayPrice = priceMin
+  const displayPrice = formatUnitPrice(product, currency, unit, fxRate, { suffix: false }) ?? '—'
 
   return (
     <motion.div
@@ -146,7 +143,7 @@ function ProductCard({
                 'font-display text-lg font-semibold',
                 variant === 'featured' ? 'text-text-primary' : 'text-text-dark'
               )}>
-                {formatPrice(displayPrice, currency)}
+                {displayPrice}
               </p>
               <p className={cn(
                 'font-mono text-[8px] uppercase tracking-widest',
@@ -238,7 +235,7 @@ function FeatureCard({
 export function CollageGrid({
   products = [],
   loading = false,
-  fxRate = 278,
+  fxRate = null,
   className,
 }: CollageGridProps) {
   const { currency, unit } = usePreferencesStore()

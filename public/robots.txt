@@ -1,0 +1,10 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /buyer
+Disallow: /supplier-portal
+Disallow: /private-portal
+Disallow: /auth
+Disallow: /c/
+
+Sitemap: https://www.fabricport.com/sitemap.xml

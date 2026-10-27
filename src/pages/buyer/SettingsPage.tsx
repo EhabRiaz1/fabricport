@@ -1,15 +1,18 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { AddressBook } from '@/components/buyer/AddressBook'
+import { ChangePasswordCard } from '@/components/shared/ChangePasswordCard'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useProfile } from '@/hooks/useProfile'
+import { normalizePhone, phoneError } from '@/lib/phone'
 import { supabase } from '@/lib/supabase'
 import { toast } from '@/stores/toast'
 
 export default function BuyerSettingsPage() {
-  const { profile, refreshProfile } = useProfile()
+  const { profile, user, refreshProfile } = useProfile()
+  const accountEmail = user?.email ?? ''
   const [fullName, setFullName] = useState('')
   const [companyName, setCompanyName] = useState('')
   const [phone, setPhone] = useState('')
@@ -24,20 +27,29 @@ export default function BuyerSettingsPage() {
     setWhatsapp(profile.whatsapp_numbers?.[0]?.number ?? '')
   }, [profile])
 
+  const phoneProblem = phoneError(phone, 'Phone number')
+  const whatsappProblem = phoneError(whatsapp, 'WhatsApp number')
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
     if (!profile?.id) return
+    if (phoneProblem || whatsappProblem) {
+      toast.error('Check the phone numbers', phoneProblem ?? whatsappProblem ?? undefined)
+      return
+    }
 
     setSaving(true)
 
+    const phoneValue = normalizePhone(phone)
+    const whatsappValue = normalizePhone(whatsapp)
     const { error: updateError } = await supabase
       .from('profiles')
       .update({
         full_name: fullName.trim() || null,
         company_name: companyName.trim() || null,
-        phone_numbers: phone.trim() ? [{ label: 'primary', number: phone.trim() }] : [],
-        whatsapp_numbers: whatsapp.trim()
-          ? [{ label: 'primary', number: whatsapp.trim(), primary: true }]
+        phone_numbers: phoneValue ? [{ label: 'primary', number: phoneValue }] : [],
+        whatsapp_numbers: whatsappValue
+          ? [{ label: 'primary', number: whatsappValue, primary: true }]
           : [],
       })
       .eq('id', profile.id)
@@ -64,6 +76,22 @@ export default function BuyerSettingsPage() {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="accountEmail" className="text-text-dark">
+                Account Email
+              </Label>
+              <Input
+                id="accountEmail"
+                type="email"
+                value={accountEmail}
+                readOnly
+                disabled
+                className="border-border-cream bg-card-hover text-text-dark-secondary"
+              />
+              <p className="text-xs text-text-dark-secondary">
+                This is the email you sign in with. Contact support to change it.
+              </p>
+            </div>
             <div className="space-y-2">
               <Label htmlFor="fullName" className="text-text-dark">
                 Full Name
@@ -97,8 +125,10 @@ export default function BuyerSettingsPage() {
                   placeholder="+92 300 0000000"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
+                  aria-invalid={Boolean(phoneProblem)}
                   className="border-border-cream bg-card-hover text-text-dark"
                 />
+                {phoneProblem && <p className="text-xs text-danger">{phoneProblem}</p>}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="whatsapp" className="text-text-dark">
@@ -110,20 +140,24 @@ export default function BuyerSettingsPage() {
                   placeholder="+92 300 0000000"
                   value={whatsapp}
                   onChange={(e) => setWhatsapp(e.target.value)}
+                  aria-invalid={Boolean(whatsappProblem)}
                   className="border-border-cream bg-card-hover text-text-dark"
                 />
+                {whatsappProblem && <p className="text-xs text-danger">{whatsappProblem}</p>}
               </div>
             </div>
             <p className="text-xs leading-relaxed text-text-dark-secondary">
               Your WhatsApp number is used for inquiry and message notifications
               once WhatsApp alerts are enabled for your account.
             </p>
-            <Button type="submit" disabled={saving}>
+            <Button type="submit" disabled={saving || Boolean(phoneProblem || whatsappProblem)}>
               {saving ? 'Saving…' : 'Save Changes'}
             </Button>
           </form>
         </CardContent>
       </Card>
+
+      {accountEmail && <ChangePasswordCard email={accountEmail} />}
 
       {profile?.id && <AddressBook buyerId={profile.id} />}
     </div>

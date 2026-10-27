@@ -5,7 +5,13 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { PaymentStatusBadge } from '@/components/shared/PaymentStatusBadge'
 import { useProfile } from '@/hooks/useProfile'
-import { INVOICE_SELECT, isOverdue, normalizeInvoice, outstandingPkr } from '@/lib/invoices'
+import {
+  INVOICE_SELECT,
+  invoiceTotalPkr,
+  isOverdue,
+  normalizeInvoice,
+  outstandingPkr,
+} from '@/lib/invoices'
 import { supabase } from '@/lib/supabase'
 import { formatPrice } from '@/lib/utils'
 import type { InvoiceWithRelations } from '@/types/app'
@@ -91,7 +97,7 @@ export default function BuyerInvoicesPage() {
                   <div className="flex items-center gap-4">
                     <div className="text-right">
                       <p className="font-display text-sm font-semibold text-text-dark">
-                        {formatPrice(invoice.subtotal_pkr ?? 0, 'PKR')}
+                        {formatPrice(invoiceTotalPkr(invoice), 'PKR')}
                       </p>
                       {outstanding > 0 && (
                         <p className="font-mono text-[10px] uppercase tracking-widest text-text-dark-secondary">

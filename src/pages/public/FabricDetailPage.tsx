@@ -23,19 +23,22 @@ import { VerifiedBadge } from '@/components/ui/badge'
 import { TestReportBadge } from '@/components/shared/TestReportBadge'
 import { useProduct, useProducts } from '@/hooks/useProducts'
 import { useAuth } from '@/contexts/AuthContext'
-import { getFxRate, convertPrice } from '@/lib/fx'
+import { useFxRate } from '@/lib/fx'
 import { createInquiry } from '@/lib/inquiries'
 import { fetchOpenSampleProductIds } from '@/lib/samples'
 import { SampleRequestDialog } from '@/components/marketplace/SampleRequestDialog'
 import { dispatchNotification } from '@/lib/notifications'
-import { trackSupplierView, usePagePresence } from '@/lib/track'
+import { trackRecentView, trackSupplierView, usePagePresence } from '@/lib/track'
 import {
+  clampQuantity,
   cn,
-  formatPrice,
+  formatUnitPrice,
   getDigitalFabricName,
   getDigitalFabricUrl,
   getProductImageUrl,
   metersToYards,
+  quantityBounds,
+  quantityIssue,
 } from '@/lib/utils'
 import {
   getAvailability,
@@ -68,7 +71,8 @@ export default function FabricDetailPage() {
   const setCartOpen = useCartUI((s) => s.setOpen)
   const openThread = useChatDock((s) => s.openThread)
   const [quantity, setQuantity] = useState(1)
-  const [fxRate, setFxRate] = useState(278)
+  // Null until the Settings rate has loaded; the price row shows PKR meanwhile.
+  const fxRate = useFxRate()
   const [adding, setAdding] = useState(false)
   const [inquiring, setInquiring] = useState(false)
   const [sampleDialogOpen, setSampleDialogOpen] = useState(false)
@@ -104,10 +108,6 @@ export default function FabricDetailPage() {
   )
 
   useEffect(() => {
-    getFxRate().then(setFxRate).catch(() => undefined)
-  }, [])
-
-  useEffect(() => {
     setActiveImage(0)
     setShowVideo(false)
   }, [product?.id])
@@ -120,6 +120,20 @@ export default function FabricDetailPage() {
       productId: product.id,
     })
   }, [product?.id, product?.supplier_id])
+
+  // "Recently viewed" on the buyer dashboard. Server-side no-op when signed out.
+  useEffect(() => {
+    if (!product?.id || !isAuthenticated) return
+    trackRecentView(product.id)
+  }, [product?.id, isAuthenticated])
+
+  // The quantity box starts at the MOQ rather than 1, so the first thing a buyer sees
+  // is a quantity the mill will actually accept.
+  useEffect(() => {
+    if (product) setQuantity(quantityBounds(product).min)
+    // Keyed on the id so a background refetch does not wipe what the buyer typed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [product?.id])
 
   usePagePresence({
     path: `/fabric/${slug ?? ''}`,
@@ -140,17 +154,9 @@ export default function FabricDetailPage() {
   const specRows = useMemo<ProductSpecRow[]>(() => {
     if (!product) return []
 
-    const minPkr = product.price_min_pkr ?? 0
-    const maxPkr = product.price_max_pkr ?? minPkr
-    const minUsd = product.price_min_usd ?? convertPrice(minPkr, 'PKR', 'USD', fxRate)
-    const maxUsd = product.price_max_usd ?? convertPrice(maxPkr, 'PKR', 'USD', fxRate)
-    const min = currency === 'USD' ? minUsd : minPkr
-    const max = currency === 'USD' ? maxUsd : maxPkr
-    const unitSuffix = unit === 'yards' ? '/yd' : '/m'
-    const price =
-      min === max || max === 0
-        ? `${formatPrice(min, currency)}${unitSuffix}`
-        : `${formatPrice(min, currency)} – ${formatPrice(max, currency)}${unitSuffix}`
+    // Per-yard conversion, the live USD rate and the approval gate ("Price on request")
+    // all live in formatUnitPrice, shared with the cards and the quick view.
+    const price = formatUnitPrice(product, currency, unit, fxRate) ?? '—'
 
     const stock =
       unit === 'yards'
@@ -206,10 +212,12 @@ export default function FabricDetailPage() {
   /** Mirrored from the legacy site's "Download Digital Fabric File"; null for most rows. */
   const digitalFabric = product?.scan_files?.[0] ?? null
 
-  // The input is a bare <input> outside a <form>, so its `min` is never enforced.
-  // Clamp here instead of trusting the field.
-  const minQuantity = product?.moq_meters ?? 1
-  const orderQuantity = Number.isFinite(quantity) && quantity > 0 ? Math.max(quantity, minQuantity) : minQuantity
+  // The input is a bare <input> outside a <form>, so its `min`/`max` are never enforced.
+  // Clamp here instead of trusting the field; the RPC checks again on the server.
+  const bounds = quantityBounds(product ?? {})
+  const quantityProblem = quantityIssue(quantity, bounds)
+  const orderQuantity = clampQuantity(quantity, bounds)
+  const samplesOffered = product?.sample_available === true
 
   /** Shared gate for both bulk CTAs. Returns false if it already redirected//toasted. */
   function ensureBuyer(): boolean {
@@ -264,9 +272,12 @@ export default function FabricDetailPage() {
 
     setInquiring(true)
     try {
+      // The opening message is posted by the RPC in the same transaction, so the
+      // supplier never opens an empty chat. Quantity is in the text as well as the line.
       const inquiryId = await createInquiry({
         supplierId: product.supplier.id,
         lines: [{ product_id: product.id, quantity_meters: orderQuantity }],
+        message: `Hi, I would like to know more about ${product.title}. I am looking at ${orderQuantity.toLocaleString('en-PK')} m.`,
       })
 
       dispatchNotification({
@@ -280,11 +291,7 @@ export default function FabricDetailPage() {
       toast.success('Inquiry sent', `${product.title} · ${orderQuantity} m`)
       // Open the conversation in the dock rather than navigating into the portal. The reader
       // asked a question about this fabric; taking them away from it to answer is backwards.
-      openThread(
-        inquiryId,
-        product.supplier.brand_name,
-        `Hi, I would like to know more about ${product.title}.`,
-      )
+      openThread(inquiryId, product.supplier.brand_name)
     } catch (err) {
       toast.error(
         'Could not send inquiry',
@@ -337,10 +344,31 @@ export default function FabricDetailPage() {
           aria-label="Breadcrumb"
           className="mb-8 flex flex-wrap items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-text-muted"
         >
-          <Link to="/marketplace" className="transition-colors hover:text-accent">
-            Marketplace
-          </Link>
-          {product.category && (
+          {/* A private fabric is reached from the buyer's private portal, not the public
+              marketplace, so the trail leads back there (and to that supplier). */}
+          {product.visibility === 'private' ? (
+            <>
+              <Link to="/private-portal" className="transition-colors hover:text-accent">
+                Private portal
+              </Link>
+              {product.supplier && (
+                <>
+                  <ChevronRight className="h-3 w-3" />
+                  <Link
+                    to={`/private-portal/${product.supplier.slug}`}
+                    className="transition-colors hover:text-accent"
+                  >
+                    {product.supplier.brand_name}
+                  </Link>
+                </>
+              )}
+            </>
+          ) : (
+            <Link to="/marketplace" className="transition-colors hover:text-accent">
+              Marketplace
+            </Link>
+          )}
+          {product.visibility !== 'private' && product.category && (
             <>
               <ChevronRight className="h-3 w-3" />
               <Link
@@ -552,16 +580,28 @@ export default function FabricDetailPage() {
                   <input
                     id="quantity"
                     type="number"
-                    min={minQuantity}
-                    step={0.5}
+                    inputMode="numeric"
+                    min={bounds.min}
+                    max={bounds.max ?? undefined}
+                    step={1}
                     value={quantity}
+                    aria-invalid={quantityProblem != null}
+                    aria-describedby="quantity-hint"
                     onChange={(event) => setQuantity(Number(event.target.value))}
-                    className="mt-2 flex h-10 w-32 border border-border-cream bg-card px-3 text-sm text-text-dark"
+                    // Snap to a quantity the mill will accept once the buyer leaves the
+                    // field; while typing, the message below explains what is wrong.
+                    onBlur={() => setQuantity(orderQuantity)}
+                    className={cn(
+                      'mt-2 flex h-10 w-32 border bg-card px-3 text-sm text-text-dark',
+                      quantityProblem ? 'border-danger' : 'border-border-cream',
+                    )}
                   />
                 </div>
 
                 <Button
                   onClick={handleInquireNow}
+                  // Not disabled on a bad quantity: the click blurs the field first, which
+                  // snaps it into range, and both handlers use the clamped orderQuantity.
                   disabled={inquiring || adding || !product.supplier}
                   className="min-w-[160px]"
                 >
@@ -580,31 +620,46 @@ export default function FabricDetailPage() {
                 </Button>
               </div>
 
-              <p className="mt-3 text-xs text-text-dark-secondary">
-                {product.moq_meters
-                  ? `Minimum order ${product.moq_meters} m. `
-                  : ''}
-                Inquire now opens a conversation with this supplier straight away. Add to cart
-                batches fabrics so you can send one inquiry per supplier later.
+              <p
+                id="quantity-hint"
+                className={cn('mt-3 text-xs', quantityProblem ? 'text-danger' : 'text-text-dark-secondary')}
+                aria-live="polite"
+              >
+                {quantityProblem ??
+                  `Whole metres, minimum ${bounds.min.toLocaleString('en-PK')} m${
+                    bounds.max != null ? `, up to ${bounds.max.toLocaleString('en-PK')} m in stock` : ''
+                  }. `}
+                {!quantityProblem &&
+                  'Inquire now opens a conversation with this supplier straight away. Add to cart batches fabrics so you can send one inquiry per supplier later.'}
               </p>
 
               {/* Samples are single-swatch and not quantity-driven, so this sits
                   outside the bulk row with a distinct icon and a lighter weight. */}
               <div className="mt-4 border-t border-border-cream pt-4">
-                <Button
-                  variant="outline"
-                  onClick={handleRequestSample}
-                  disabled={sampleAlreadyRequested || !product.supplier}
-                  className="min-w-[200px]"
-                >
-                  <Swatch className="h-4 w-4" />
-                  {sampleAlreadyRequested ? 'Sample requested ✓' : 'Request a sample'}
-                </Button>
-                <p className="mt-2 text-xs text-text-dark-secondary">
-                  {sampleAlreadyRequested
-                    ? 'You already have an open request for this fabric.'
-                    : 'A physical swatch posted to your address. No minimum.'}
-                </p>
+                {samplesOffered ? (
+                  <>
+                    <Button
+                      variant="outline"
+                      onClick={handleRequestSample}
+                      disabled={sampleAlreadyRequested || !product.supplier}
+                      className="min-w-[200px]"
+                    >
+                      <Swatch className="h-4 w-4" />
+                      {sampleAlreadyRequested ? 'Sample requested ✓' : 'Request a sample'}
+                    </Button>
+                    <p className="mt-2 text-xs text-text-dark-secondary">
+                      {sampleAlreadyRequested
+                        ? 'You already have an open request for this fabric.'
+                        : 'Ask the mill for a physical swatch. They confirm before it is posted.'}
+                    </p>
+                  </>
+                ) : (
+                  // The flag is the mill's call; the server rejects a request regardless.
+                  <p className="flex items-center gap-2 text-xs text-text-dark-secondary">
+                    <Swatch className="h-4 w-4 opacity-60" />
+                    Samples are not offered for this fabric.
+                  </p>
+                )}
               </div>
 
               {/*
@@ -681,7 +736,7 @@ export default function FabricDetailPage() {
           buyerId={user.id}
           onSubmitted={(sampleRequestId) => {
             setSampleAlreadyRequested(true)
-            toast.success('Sample requested', `${product.title} · swatch on its way`)
+            toast.success('Sample requested', 'Waiting for the mill to accept')
             navigate(`/buyer/samples/${sampleRequestId}`)
           }}
         />

@@ -11,23 +11,43 @@ import {
 } from '@/components/ui/dialog'
 import { supabase } from '@/lib/supabase'
 import { formatPrice, getProductImageUrl } from '@/lib/utils'
+import { convertPkrToUsd, useFxRate } from '@/lib/fx'
+import { getComposition, getGsmLabelShort, getWidth } from '@/lib/product-specs'
 import { useAuth } from '@/contexts/AuthContext'
 import { useWishlistStore } from '@/stores/wishlist'
 import { usePreferencesStore } from '@/stores/preferences'
 import { toast } from '@/stores/toast'
 import type { ProductWithRelations } from '@/types/app'
 
+// The EAV rows ride along so legacy fabrics without the promoted gsm / width / composition
+// columns still show their specs (same fallback as the marketplace card).
 const WISHLIST_SELECT = `
   *,
-  supplier:suppliers(id, brand_name, slug, is_verified)
+  supplier:suppliers(id, brand_name, slug, is_verified),
+  attributes:product_attributes(value_text, value_number, attribute:fabric_attributes(slug, name, unit))
 `
 
-function priceLabel(product: ProductWithRelations, currency: 'PKR' | 'USD'): string {
-  const min = currency === 'USD' ? product.price_min_usd : product.price_min_pkr
-  const max = currency === 'USD' ? product.price_max_usd : product.price_max_pkr
+/** PKR is the stored price; USD is always derived from it with the live rate. */
+function priceLabel(
+  product: ProductWithRelations,
+  currency: 'PKR' | 'USD',
+  fxRate: number | null,
+): string {
+  if (!product.price_approved) return 'Price on request'
+  const min = product.price_min_pkr
+  const max = product.price_max_pkr
   if (min == null || min === 0) return '—'
-  if (max == null || max === min) return formatPrice(min, currency)
-  return `${formatPrice(min, currency)} – ${formatPrice(max, currency)}`
+  // Until the rate loads, show PKR rather than a guessed conversion.
+  const shown = currency === 'USD' && fxRate ? 'USD' : 'PKR'
+  const fmt = (pkr: number) =>
+    formatPrice(shown === 'USD' && fxRate ? convertPkrToUsd(pkr, fxRate) : pkr, shown)
+  if (max == null || max === min) return fmt(min)
+  return `${fmt(min)} – ${fmt(max)}`
+}
+
+function widthLabel(product: ProductWithRelations): string {
+  const width = getWidth(product)
+  return width ? `${width}"` : '—'
 }
 
 export default function WishlistPage() {
@@ -35,6 +55,7 @@ export default function WishlistPage() {
   const ids = useWishlistStore((s) => s.ids)
   const toggle = useWishlistStore((s) => s.toggle)
   const { currency } = usePreferencesStore()
+  const fxRate = useFxRate()
   const [products, setProducts] = useState<ProductWithRelations[]>([])
   const [loading, setLoading] = useState(true)
   const [active, setActive] = useState<ProductWithRelations | null>(null)
@@ -137,16 +158,16 @@ export default function WishlistPage() {
                     )}
                   </td>
                   <td className="px-4 py-3 font-mono text-xs text-text-secondary">
-                    {product.gsm ?? '—'}
+                    {getGsmLabelShort(product) ?? '—'}
                   </td>
                   <td className="px-4 py-3 font-mono text-xs text-text-secondary">
-                    {product.width_inches ? `${product.width_inches}"` : '—'}
+                    {widthLabel(product)}
                   </td>
                   <td className="max-w-[200px] truncate px-4 py-3 font-mono text-xs text-text-secondary">
-                    {product.composition ?? '—'}
+                    {getComposition(product) ?? '—'}
                   </td>
                   <td className="px-4 py-3 font-mono text-xs text-text-secondary">
-                    {priceLabel(product, currency)}
+                    {priceLabel(product, currency, fxRate)}
                   </td>
                   <td className="px-4 py-3 font-mono text-xs text-text-secondary">
                     {product.stock_meters.toFixed(0)} m
@@ -200,10 +221,10 @@ export default function WishlistPage() {
               <dl className="grid grid-cols-2 gap-3 font-mono text-xs">
                 {[
                   ['Supplier', active.supplier?.brand_name ?? '—'],
-                  ['GSM', active.gsm ?? '—'],
-                  ['Width', active.width_inches ? `${active.width_inches}"` : '—'],
-                  ['Composition', active.composition ?? '—'],
-                  ['Price', priceLabel(active, currency)],
+                  ['GSM', getGsmLabelShort(active) ?? '—'],
+                  ['Width', widthLabel(active)],
+                  ['Composition', getComposition(active) ?? '—'],
+                  ['Price', priceLabel(active, currency, fxRate)],
                   ['Stock', `${active.stock_meters.toFixed(0)} m`],
                   ['MOQ', active.moq_meters ? `${active.moq_meters} m` : '—'],
                   ['Lead time', active.lead_time_days ? `${active.lead_time_days} d` : '—'],

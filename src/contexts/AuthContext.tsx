@@ -12,6 +12,9 @@ interface AuthContextValue {
   isLoading: boolean
   isAuthenticated: boolean
   profileError: string | null
+  /** True after a password-recovery link was opened, until the password is changed. */
+  isPasswordRecovery: boolean
+  clearPasswordRecovery: () => void
   signOut: () => Promise<void>
   refreshProfile: () => Promise<void>
 }
@@ -73,6 +76,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [profileLoading, setProfileLoading] = useState(false)
   const [profileError, setProfileError] = useState<string | null>(null)
+  const [isPasswordRecovery, setIsPasswordRecovery] = useState(false)
 
   const userId = session?.user.id ?? null
 
@@ -89,8 +93,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+    } = supabase.auth.onAuthStateChange((event, nextSession) => {
       setSession(nextSession)
+      if (event === 'PASSWORD_RECOVERY') setIsPasswordRecovery(true)
+      if (event === 'SIGNED_OUT') setIsPasswordRecovery(false)
     })
 
     return () => subscription.unsubscribe()
@@ -143,11 +149,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   }, [userId])
 
+  const clearPasswordRecovery = useCallback(() => setIsPasswordRecovery(false), [])
+
   const signOut = useCallback(async () => {
     await supabase.auth.signOut()
     setSession(null)
     setProfile(null)
     setProfileError(null)
+    setIsPasswordRecovery(false)
   }, [])
 
   const user = useMemo(() => {
@@ -166,10 +175,22 @@ export function AuthProvider({ children }: AuthProviderProps) {
       isLoading,
       isAuthenticated: Boolean(user),
       profileError,
+      isPasswordRecovery,
+      clearPasswordRecovery,
       signOut,
       refreshProfile,
     }),
-    [user, session, profile, isLoading, profileError, signOut, refreshProfile],
+    [
+      user,
+      session,
+      profile,
+      isLoading,
+      profileError,
+      isPasswordRecovery,
+      clearPasswordRecovery,
+      signOut,
+      refreshProfile,
+    ],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

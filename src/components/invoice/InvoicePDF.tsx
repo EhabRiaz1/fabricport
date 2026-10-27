@@ -5,7 +5,8 @@ import {
   View,
   StyleSheet,
 } from '@react-pdf/renderer'
-import type { InvoiceLineItem } from '@/types/database.types'
+import { formatPrice } from '@/lib/utils'
+import type { InvoiceLineItem, InvoiceStatus, InvoiceTaxMode } from '@/types/database.types'
 
 const styles = StyleSheet.create({
   page: {
@@ -54,6 +55,18 @@ const styles = StyleSheet.create({
     marginTop: 16,
     alignItems: 'flex-end',
   },
+  totalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: 220,
+    paddingVertical: 2,
+  },
+  grandTotalRow: {
+    marginTop: 4,
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: '#1A1A1A',
+  },
   notes: {
     marginTop: 24,
     padding: 12,
@@ -68,8 +81,25 @@ export interface InvoicePDFProps {
   lineItems: InvoiceLineItem[]
   subtotalPkr: number
   subtotalUsd: number
+  taxMode?: InvoiceTaxMode
+  taxRatePercent?: number
+  taxPkr?: number
+  freightPkr?: number
+  /** Subtotal + tax + freight. Falls back to the subtotal when omitted. */
+  totalPkr?: number
+  paymentTerms?: string
+  dueDate?: string
   notes?: string
   createdAt?: string
+  status?: InvoiceStatus
+}
+
+function formatDate(value: string) {
+  return new Date(value).toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  })
 }
 
 export function InvoicePDF({
@@ -79,20 +109,30 @@ export function InvoicePDF({
   lineItems,
   subtotalPkr,
   subtotalUsd,
+  taxMode = 'total',
+  taxRatePercent = 0,
+  taxPkr = 0,
+  freightPkr = 0,
+  totalPkr,
+  paymentTerms,
+  dueDate,
   notes,
   createdAt,
+  status,
 }: InvoicePDFProps) {
+  const perLine = taxMode === 'per_line'
+  const grandTotal = totalPkr ?? subtotalPkr + taxPkr + freightPkr
   return (
     <Document>
       <Page size="A4" style={styles.page}>
         <View style={styles.header}>
-          <Text style={styles.title}>FabricPort Invoice</Text>
+          <Text style={styles.title}>
+            FabricPort Invoice{status === 'draft' ? ' (draft)' : status === 'cancelled' ? ' (cancelled)' : ''}
+          </Text>
           <Text style={styles.subtitle}>#{invoiceNumber}</Text>
-          {createdAt && (
-            <Text style={styles.subtitle}>
-              Date: {new Date(createdAt).toLocaleDateString()}
-            </Text>
-          )}
+          {createdAt && <Text style={styles.subtitle}>Date: {formatDate(createdAt)}</Text>}
+          {dueDate && <Text style={styles.subtitle}>Due: {formatDate(dueDate)}</Text>}
+          {paymentTerms && <Text style={styles.subtitle}>Payment terms: {paymentTerms}</Text>}
         </View>
 
         <View>
@@ -104,31 +144,48 @@ export function InvoicePDF({
           <View style={styles.headerRow}>
             <Text style={[styles.colTitle, styles.bold]}>Item</Text>
             <Text style={[styles.colQty, styles.bold]}>Qty (m)</Text>
-            <Text style={[styles.colPrice, styles.bold]}>Unit PKR</Text>
-            <Text style={[styles.colTotal, styles.bold]}>Total PKR</Text>
+            <Text style={[styles.colPrice, styles.bold]}>Unit price</Text>
+            {perLine && <Text style={[styles.colQty, styles.bold]}>Tax %</Text>}
+            <Text style={[styles.colTotal, styles.bold]}>Amount</Text>
           </View>
 
           {lineItems.map((item, i) => (
             <View key={`${item.product_id}-${i}`} style={styles.row}>
               <Text style={styles.colTitle}>{item.title}</Text>
-              <Text style={styles.colQty}>{item.qty}</Text>
-              <Text style={styles.colPrice}>
-                {item.unit_price_pkr.toLocaleString()}
-              </Text>
+              <Text style={styles.colQty}>{item.qty.toLocaleString('en-PK')}</Text>
+              <Text style={styles.colPrice}>{formatPrice(item.unit_price_pkr, 'PKR')}</Text>
+              {perLine && (
+                <Text style={styles.colQty}>{item.tax_rate_percent ?? taxRatePercent}%</Text>
+              )}
               <Text style={styles.colTotal}>
-                {(item.qty * item.unit_price_pkr).toLocaleString()}
+                {formatPrice(item.qty * item.unit_price_pkr, 'PKR')}
               </Text>
             </View>
           ))}
         </View>
 
         <View style={styles.totals}>
-          <Text style={styles.bold}>
-            Subtotal PKR: {subtotalPkr.toLocaleString()}
-          </Text>
-          <Text style={{ marginTop: 4 }}>
-            Subtotal USD: ${subtotalUsd.toFixed(2)}
-          </Text>
+          <View style={styles.totalRow}>
+            <Text>Subtotal</Text>
+            <Text>{formatPrice(subtotalPkr, 'PKR')}</Text>
+          </View>
+          <View style={styles.totalRow}>
+            <Text>{perLine ? 'Tax (per line)' : `Tax (${taxRatePercent}%)`}</Text>
+            <Text>{formatPrice(taxPkr, 'PKR')}</Text>
+          </View>
+          <View style={styles.totalRow}>
+            <Text>Freight</Text>
+            <Text>{formatPrice(freightPkr, 'PKR')}</Text>
+          </View>
+          <View style={[styles.totalRow, styles.grandTotalRow]}>
+            <Text style={styles.bold}>Total</Text>
+            <Text style={styles.bold}>{formatPrice(grandTotal, 'PKR')}</Text>
+          </View>
+          {subtotalUsd > 0 && (
+            <Text style={[styles.subtitle, { marginTop: 4 }]}>
+              Goods subtotal approx. {formatPrice(subtotalUsd, 'USD')}
+            </Text>
+          )}
         </View>
 
         {notes && (

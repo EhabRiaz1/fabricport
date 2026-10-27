@@ -44,7 +44,12 @@ export function applyProductFilters<Q extends AnyQuery>(
 ): Q {
   let q = query
 
-  if (filters?.search) q = q.ilike('title', `%${filters.search}%`) as Q
+  // `search_text` is the trigger-maintained concatenation of title, mill, category,
+  // composition, colour and spec facets (see the search_text migration), so one ILIKE
+  // covers everything a buyer types. Trimmed so a trailing space cannot zero the results,
+  // and the LIKE metacharacters are escaped so "100%" means the literal characters.
+  const search = normalizeSearch(filters?.search)
+  if (search) q = q.ilike('search_text', `%${search}%`) as Q
   if (filters?.colorFamilies?.length) q = q.in('color_family', filters.colorFamilies) as Q
 
   if (filters?.priceMin != null) q = q.gte('price_min_pkr', filters.priceMin) as Q
@@ -81,6 +86,31 @@ export function applyProductFilters<Q extends AnyQuery>(
   return q
 }
 
+/** Trimmed, whitespace-collapsed, LIKE-escaped search term; null when nothing is left. */
+export function normalizeSearch(raw: string | undefined | null): string | null {
+  const trimmed = (raw ?? '').replace(/\s+/g, ' ').trim()
+  if (!trimmed) return null
+  return trimmed.replace(/[\\%_]/g, (char) => `\\${char}`)
+}
+
+/**
+ * Placeholder text that legacy imports left in attribute values. Mirrors
+ * `public.clean_facet_value` (search_text migration) so the sidebar tally drops the same
+ * values even before every row has been re-projected.
+ */
+const JUNK_FACET_VALUES = new Set([
+  'na', 'n/a', 'n.a', 'n.a.', 'none', 'null', 'nil', '-', '--', '—', '.', '0',
+  'pattern', 'type', 'weave', 'knit type', 'finish', 'tbd', 'tba', 'unknown',
+])
+
+/** Trimmed facet value, or null when it is empty or a placeholder such as "N/A". */
+export function cleanFacetValue(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null
+  const trimmed = raw.trim()
+  if (!trimmed || JUNK_FACET_VALUES.has(trimmed.toLowerCase())) return null
+  return trimmed
+}
+
 /** Number of user-visible facets in play. Sort is not a filter. */
 export function countActiveFilters(filters: MarketplaceFilters): number {
   let n = 0
@@ -91,7 +121,7 @@ export function countActiveFilters(filters: MarketplaceFilters): number {
   if (filters.gsmMin != null || filters.gsmMax != null) n++
   if (filters.widthMin != null || filters.widthMax != null) n++
   if (filters.running) n++
-  if (filters.search) n++
+  if (normalizeSearch(filters.search)) n++
   for (const key of [...Object.keys(SCALAR_FACETS), ...Object.keys(ARRAY_FACETS)]) {
     const selected = filters[key as keyof MarketplaceFilters] as string[] | undefined
     n += selected?.length ?? 0

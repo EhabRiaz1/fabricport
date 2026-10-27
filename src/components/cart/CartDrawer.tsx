@@ -22,11 +22,16 @@ import {
 import { usePreferencesStore } from '@/stores/preferences'
 import { useAuth } from '@/contexts/AuthContext'
 import { useProfile } from '@/hooks/useProfile'
-import { getProductImageUrl, formatPrice, metersToYards } from '@/lib/utils'
-import { convertPrice, getFxRate } from '@/lib/fx'
+import {
+  getProductImageUrl,
+  formatPrice,
+  formatUnitPrice,
+  metersToYards,
+  quantityBounds,
+} from '@/lib/utils'
+import { convertPrice, useFxRate } from '@/lib/fx'
 import { toast } from '@/stores/toast'
 import { cn } from '@/lib/utils'
-import { useEffect } from 'react'
 
 /**
  * Quick cart review from the nav.
@@ -42,8 +47,11 @@ export function CartDrawer() {
   const { isAuthenticated, role } = useAuth()
   const { profile } = useProfile()
   const { currency, unit } = usePreferencesStore()
-  const [fxRate, setFxRate] = useState(278)
+  // Null until the Settings rate has loaded; prices show in PKR meanwhile.
+  const fxRate = useFxRate()
   const [submitting, setSubmitting] = useState(false)
+  // Optional note sent as the opening chat message of each inquiry (#21).
+  const [note, setNote] = useState('')
 
   const lines = useCartStore((s) => s.lines)
   const guestLines = useCartStore((s) => s.guestLines)
@@ -54,10 +62,6 @@ export function CartDrawer() {
 
   // Lenis keeps its own scroll target, so without this the page lurches by a frame on close.
   useLenisLock(open)
-
-  useEffect(() => {
-    getFxRate().then(setFxRate).catch(() => undefined)
-  }, [])
 
   const groups = useMemo(() => groupBySupplier(lines), [lines])
   // Rows whose supplier could not be resolved are not in any group, so without this they
@@ -79,16 +83,31 @@ export function CartDrawer() {
   // Storage stays meters + PKR; only the display converts. CartPage hardcoded "Qty (m)" and
   // PKR and ignored the global unit toggle entirely.
   const showPrice = (pkr: number) =>
-    formatPrice(currency === 'USD' ? convertPrice(pkr, 'PKR', 'USD', fxRate) : pkr, currency)
+    currency === 'USD' && fxRate != null
+      ? formatPrice(convertPrice(pkr, 'PKR', 'USD', fxRate), 'USD')
+      : formatPrice(pkr, 'PKR')
   const showQty = (meters: number) =>
     unit === 'yards' ? `${metersToYards(meters).toFixed(1)} yd` : `${meters} m`
+  // Per-unit price (per yard = per metre ÷ 1.09361) through the shared helper.
+  const showUnitPrice = (pkr: number | null) =>
+    formatUnitPrice({ price_min_pkr: pkr }, currency, unit, fxRate)
+  // The store clamps and writes; a failed write rolls back and throws, so say so.
+  const changeQuantity = (productId: string, q: number) => {
+    setQuantity(productId, q).catch((err) =>
+      toast.error(
+        'Could not update quantity',
+        err instanceof Error ? err.message : 'Please try again.',
+      ),
+    )
+  }
 
   const itemCount = isGuest ? guestLines.length : lines.length
 
   async function handleSubmit() {
     if (!profile?.id || groups.length === 0) return
     setSubmitting(true)
-    const result = await submitCartInquiries(profile, groups)
+    // An empty note lets create_inquiry compose the opening message from the lines.
+    const result = await submitCartInquiries(profile, groups, note.trim() || null)
     setSubmitting(false)
 
     if (result.error) {
@@ -96,6 +115,7 @@ export function CartDrawer() {
       await load(profile.id)
       return
     }
+    setNote('')
     toast.success(
       result.total === 1 ? 'Inquiry sent' : `${result.total} inquiries sent`,
       'Suppliers have been notified and will respond in your inbox.',
@@ -146,10 +166,11 @@ export function CartDrawer() {
                   supplierName={line.supplier_name}
                   unitPrice={line.price_min_pkr}
                   quantity={line.quantity_meters}
-                  minQty={line.moq_meters ?? 1}
+                  bounds={quantityBounds(line)}
                   showPrice={showPrice}
+                  unitPriceLabel={showUnitPrice(line.price_min_pkr)}
                   showQty={showQty}
-                  onQuantity={(q) => setQuantity(line.product_id, q)}
+                  onQuantity={(q) => changeQuantity(line.product_id, q)}
                   onRemove={() => remove(line.product_id)}
                   onNavigate={() => setOpen(false)}
                 />
@@ -176,10 +197,11 @@ export function CartDrawer() {
                       supplierName={null}
                       unitPrice={item.product.price_min_pkr}
                       quantity={item.quantity_meters}
-                      minQty={item.product.moq_meters ?? 1}
+                      bounds={quantityBounds(item.product)}
                       showPrice={showPrice}
+                      unitPriceLabel={showUnitPrice(item.product.price_min_pkr)}
                       showQty={showQty}
-                      onQuantity={(q) => setQuantity(item.product_id, q)}
+                      onQuantity={(q) => changeQuantity(item.product_id, q)}
                       onRemove={() => remove(item.product_id)}
                       onNavigate={() => setOpen(false)}
                     />
@@ -235,6 +257,21 @@ export function CartDrawer() {
                 Inquiries can only be sent from a buyer account.
               </p>
             ) : (
+              <>
+              <label className="mt-4 block">
+                <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-[#3C2A1A]/60">
+                  Note to suppliers (optional)
+                </span>
+                <textarea
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  maxLength={2000}
+                  rows={2}
+                  disabled={submitting}
+                  placeholder="Delivery timeline, intended use, colour questions…"
+                  className="mt-1 block w-full resize-none border border-[#C8C4BC] bg-white/60 px-3 py-2 text-sm text-[#2C1A0E] placeholder:text-[#9C8870] focus:border-[#7A4A28] focus:outline-none"
+                />
+              </label>
               <button
                 type="button"
                 onClick={handleSubmit}
@@ -245,6 +282,7 @@ export function CartDrawer() {
                   ? 'Sending…'
                   : `Submit ${groups.length} ${groups.length === 1 ? 'inquiry' : 'inquiries'}`}
               </button>
+              </>
             )}
 
             <Link
@@ -268,8 +306,9 @@ function CartRow({
   supplierName,
   unitPrice,
   quantity,
-  minQty,
+  bounds,
   showPrice,
+  unitPriceLabel,
   showQty,
   onQuantity,
   onRemove,
@@ -281,14 +320,23 @@ function CartRow({
   supplierName: string | null
   unitPrice: number | null
   quantity: number
-  minQty: number
+  /** Whole-metre bounds: MOQ (or 1) up to the stock, when there is any. */
+  bounds: { min: number; max: number | null }
   showPrice: (pkr: number) => string
+  /** e.g. "PKR 709/yd"; null when the fabric has no price. */
+  unitPriceLabel: string | null
   showQty: (meters: number) => string
   onQuantity: (quantity: number) => void
   onRemove: () => void
   onNavigate: () => void
 }) {
-  const step = (delta: number) => onQuantity(Math.max(minQty, quantity + delta))
+  const minQty = bounds.min
+  const maxQty = bounds.max
+  const atMax = maxQty != null && quantity >= maxQty
+  const step = (delta: number) => {
+    const next = Math.max(minQty, quantity + delta)
+    onQuantity(maxQty != null ? Math.min(next, maxQty) : next)
+  }
 
   return (
     <li className="flex gap-3 px-5 py-4">
@@ -320,6 +368,11 @@ function CartRow({
             {supplierName}
           </p>
         )}
+        {unitPriceLabel && (
+          <p className="truncate font-mono text-[9px] tabular-nums text-[#3C2A1A]/60">
+            {unitPriceLabel}
+          </p>
+        )}
 
         <div className="mt-2 flex items-center gap-2">
           <div className="flex items-center border border-[#C8C4BC]">
@@ -339,7 +392,9 @@ function CartRow({
               type="button"
               onClick={() => step(Math.max(1, minQty))}
               aria-label="Increase quantity"
-              className="grid h-7 w-7 place-items-center text-[#3C2A1A] transition-colors hover:bg-[#E8E2D2]"
+              disabled={atMax}
+              title={atMax ? `Only ${maxQty} m in stock` : undefined}
+              className="grid h-7 w-7 place-items-center text-[#3C2A1A] transition-colors hover:bg-[#E8E2D2] disabled:opacity-30"
             >
               <Plus className="h-3 w-3" />
             </button>
@@ -363,6 +418,11 @@ function CartRow({
             <Trash2 className="h-3.5 w-3.5" />
           </button>
         </div>
+        {atMax && (
+          <p className="mt-1 font-mono text-[9px] uppercase tracking-[0.14em] text-[#9C8870]">
+            Only {maxQty?.toLocaleString('en-PK')} m in stock
+          </p>
+        )}
       </div>
     </li>
   )

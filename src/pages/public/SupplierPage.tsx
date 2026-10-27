@@ -13,6 +13,8 @@ import { useSupplier } from '@/hooks/useSuppliers'
 import { getFxRate } from '@/lib/fx'
 import { trackSupplierView, usePagePresence } from '@/lib/track'
 import { usePreferencesStore } from '@/stores/preferences'
+import { extraBadgeLabel, pluralize } from '@/lib/text'
+import { PageMeta } from '@/components/shared/PageMeta'
 
 export default function SupplierPage() {
   const { slug } = useParams<{ slug: string }>()
@@ -22,7 +24,7 @@ export default function SupplierPage() {
     enabled: Boolean(slug),
   })
   const { currency, unit } = usePreferencesStore()
-  const [fxRate, setFxRate] = useState(278)
+  const [fxRate, setFxRate] = useState<number | null>(null)
 
   useEffect(() => {
     getFxRate().then(setFxRate).catch(() => undefined)
@@ -77,6 +79,11 @@ export default function SupplierPage() {
 
   return (
     <>
+      <PageMeta
+        title={supplier.brand_name}
+        description={`${supplier.is_verified ? 'Verified mill' : 'Mill'} on FabricPort. Browse ${supplier.brand_name}'s surplus and running fabrics with measured specs, and inquire direct.`}
+        path={`/supplier/${supplier.slug}`}
+      />
       <PublicNav />
       <main className="mx-auto max-w-7xl px-6 pb-20 pt-24 lg:px-8">
         <section className="clip-corner border border-border bg-surface p-8 lg:p-12">
@@ -89,12 +96,12 @@ export default function SupplierPage() {
                 {supplier.is_verified && <VerifiedBadge />}
               </div>
 
-              {supplier.badge_label && (
-                <p className="mt-2 text-sm text-text-secondary">{supplier.badge_label}</p>
+              {extraBadgeLabel(supplier.badge_label) && (
+                <p className="mt-2 text-sm text-text-secondary">{extraBadgeLabel(supplier.badge_label)}</p>
               )}
 
               <p className="mt-4 font-mono text-[10px] uppercase tracking-widest text-text-muted">
-                {supplier.product_count} published fabrics
+                {pluralize(supplier.product_count, 'published fabric')}
               </p>
 
               <div className="mt-6 flex flex-wrap gap-4">
@@ -132,7 +139,7 @@ export default function SupplierPage() {
             Catalogue
           </h2>
           <p className="mt-2 text-sm text-text-secondary">
-            {productsLoading ? 'Loading products…' : `${products.length} fabrics from this supplier`}
+            {productsLoading ? 'Loading products…' : `${pluralize(products.length, 'fabric')} from this supplier`}
           </p>
 
           <div className="mt-8 grid gap-6 sm:grid-cols-2 xl:grid-cols-3">

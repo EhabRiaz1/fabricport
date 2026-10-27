@@ -1,4 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { preferencesUrl, renderEmail, SUPPORT_EMAIL } from '../_shared/email-layout.ts'
+import { buildEmail, type RecipientRole } from './templates.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -64,11 +66,20 @@ async function sendWhatsApp(
   }
 }
 
+interface OutgoingEmail {
+  to: string
+  subject: string
+  html: string
+  text: string
+  /** Notification row id; stops Gmail threading unrelated notifications together. */
+  refId: string
+  /** Settings page where the recipient can turn this notification off. */
+  preferencesUrl: string
+}
+
 /** Send an email via Resend. Returns null when not configured. */
 async function sendEmail(
-  to: string,
-  subject: string,
-  text: string,
+  email: OutgoingEmail,
 ): Promise<{ ok: boolean; error?: string } | null> {
   const apiKey = Deno.env.get('RESEND_API_KEY')
   const from = Deno.env.get('RESEND_FROM') ?? 'FabricPort <notifications@fabricport.com>'
@@ -83,9 +94,15 @@ async function sendEmail(
       },
       body: JSON.stringify({
         from,
-        to: [to],
-        subject,
-        text,
+        to: [email.to],
+        reply_to: SUPPORT_EMAIL,
+        subject: email.subject,
+        html: email.html,
+        text: email.text,
+        headers: {
+          'List-Unsubscribe': `<${email.preferencesUrl}>, <mailto:${SUPPORT_EMAIL}?subject=unsubscribe>`,
+          'X-Entity-Ref-ID': email.refId,
+        },
       }),
     })
     if (!res.ok) {
@@ -110,6 +127,17 @@ Deno.serve(async (req) => {
       auth: { autoRefreshToken: false, persistSession: false },
     })
 
+    // Caller must be a signed-in user. Without this anyone holding the anon key
+    // could push WhatsApp / email to any user id.
+    const authHeader = req.headers.get('Authorization') ?? ''
+    const token = authHeader.replace('Bearer ', '')
+    if (!token) return json({ ok: false, error: 'Missing authorization' }, 401)
+    const { data: callerData, error: callerError } = await admin.auth.getUser(token)
+    if (callerError || !callerData.user) {
+      return json({ ok: false, error: 'Invalid session' }, 401)
+    }
+    const callerId = callerData.user.id
+
     const payload = (await req.json()) as NotificationRequest
     if (!payload.userId || !payload.type || !payload.title) {
       return json({ ok: false, error: 'userId, type and title are required' }, 400)
@@ -123,7 +151,7 @@ Deno.serve(async (req) => {
         type: payload.type,
         title: payload.title,
         body: payload.body ?? null,
-        data: payload.data ?? null,
+        data: { ...(payload.data ?? {}), triggered_by: callerId },
       })
       .select()
       .single()
@@ -153,16 +181,31 @@ Deno.serve(async (req) => {
 
     const results: Record<string, unknown> = { in_app: true }
 
+    // Branded content for this notification type (falls back to title/body).
+    const role = profile?.role
+    const recipientRole: RecipientRole =
+      role === 'buyer' || role === 'supplier' || role === 'admin' ? role : null
+    const content = buildEmail({
+      type: payload.type,
+      title: payload.title,
+      body: payload.body ?? null,
+      data: payload.data ?? null,
+      recipientName: profile?.full_name ?? null,
+      recipientRole,
+    })
+
     // 3. WhatsApp fan-out
     const whatsappNumbers = (profile?.whatsapp_numbers ?? []) as {
       number: string
+      label?: string
       primary?: boolean
     }[]
     const primaryWa =
-      whatsappNumbers.find((n) => n.primary)?.number ?? whatsappNumbers[0]?.number
+      whatsappNumbers.find((n) => n.primary || n.label === 'primary')?.number ??
+      whatsappNumbers[0]?.number
 
     if (wantWhatsapp && primaryWa) {
-      const text = `${payload.title}${payload.body ? `\n\n${payload.body}` : ''}\n\n— FabricPort`
+      const text = `${payload.title}${payload.body ? `\n\n${payload.body}` : ''}\n\n— FabricPort\n${content.ctaUrl}`
       const waResult = await sendWhatsApp(primaryWa, text)
       if (waResult === null) {
         results.whatsapp = 'not_configured'
@@ -182,13 +225,20 @@ Deno.serve(async (req) => {
     }
 
     // 4. Email fan-out
-    const email = authUser?.data?.user?.email
+    const email = authUser?.user?.email
     if (wantEmail && email) {
-      const emailResult = await sendEmail(
-        email,
-        payload.title,
-        `${payload.body ?? payload.title}\n\nOpen your FabricPort portal to respond.`,
-      )
+      // ctaUrl is rendered inside the layout's button; it is not a layout prop.
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { subject, ctaUrl: _ctaUrl, ...layout } = content
+      const rendered = renderEmail(layout)
+      const emailResult = await sendEmail({
+        to: email,
+        subject,
+        html: rendered.html,
+        text: rendered.text,
+        refId: notification.id,
+        preferencesUrl: preferencesUrl(recipientRole),
+      })
       results.email =
         emailResult === null
           ? 'not_configured'

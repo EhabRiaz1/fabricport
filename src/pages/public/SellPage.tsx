@@ -54,6 +54,7 @@ export default function SellPage() {
             </p>
             <Link
               to="/auth/login"
+              state={{ from: '/sell' }}
               className="mt-8 inline-flex items-center gap-2 border border-white/20 px-6 py-3 font-mono text-[10px] uppercase tracking-widest text-white/70 transition-colors hover:border-white/40 hover:text-white"
             >
               Sign in

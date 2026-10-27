@@ -8,6 +8,8 @@ interface BuyerOption {
   id: string
   full_name: string | null
   company_name: string | null
+  email: string | null
+  is_demo?: boolean
 }
 
 export interface PrivateBuyerPickerProps {
@@ -16,9 +18,9 @@ export interface PrivateBuyerPickerProps {
 }
 
 /**
- * Chooses which buyer accounts can see a private fabric. Buyers are read from
- * `profiles` (role = buyer) because that is where the display names live;
- * buyers.id and profiles.id are the same uuid.
+ * Chooses which buyer accounts can see a private fabric. Buyers come from the
+ * admin-only `get_buyer_directory` RPC, which joins auth.users so the email is
+ * shown next to every name: many buyers have no company name, and names repeat.
  */
 export function PrivateBuyerPicker({ value, onChange }: PrivateBuyerPickerProps) {
   const [buyers, setBuyers] = useState<BuyerOption[]>([])
@@ -27,17 +29,13 @@ export function PrivateBuyerPicker({ value, onChange }: PrivateBuyerPickerProps)
   const [query, setQuery] = useState('')
 
   useEffect(() => {
-    supabase
-      .from('profiles')
-      .select('id, full_name, company_name')
-      .eq('role', 'buyer')
-      .then(({ data, error: fetchError }) => {
-        if (fetchError) setError(fetchError.message)
-        const rows = (data ?? []) as BuyerOption[]
-        rows.sort((a, b) => buyerDisplayName(a).localeCompare(buyerDisplayName(b)))
-        setBuyers(rows)
-        setLoading(false)
-      })
+    supabase.rpc('get_buyer_directory').then(({ data, error: fetchError }) => {
+      if (fetchError) setError(fetchError.message)
+      const rows = ((data ?? []) as BuyerOption[]).slice()
+      rows.sort((a, b) => buyerDisplayName(a).localeCompare(buyerDisplayName(b)))
+      setBuyers(rows)
+      setLoading(false)
+    })
   }, [])
 
   const selected = useMemo(() => new Set(value), [value])
@@ -47,7 +45,7 @@ export function PrivateBuyerPicker({ value, onChange }: PrivateBuyerPickerProps)
     const q = query.trim().toLowerCase()
     if (!q) return buyers
     return buyers.filter((b) =>
-      [b.company_name, b.full_name].some((field) => field?.toLowerCase().includes(q)),
+      [b.company_name, b.full_name, b.email].some((field) => field?.toLowerCase().includes(q)),
     )
   }, [buyers, query])
 
@@ -67,6 +65,9 @@ export function PrivateBuyerPicker({ value, onChange }: PrivateBuyerPickerProps)
                 className="inline-flex items-center gap-1 border border-border-cream bg-surface/5 px-2 py-1 text-xs text-text-dark"
               >
                 {buyer ? buyerDisplayName(buyer) : 'Loading…'}
+                {buyer?.email && (
+                  <span className="text-text-dark-secondary">· {buyer.email}</span>
+                )}
                 <button
                   type="button"
                   aria-label="Remove buyer"
@@ -84,7 +85,7 @@ export function PrivateBuyerPicker({ value, onChange }: PrivateBuyerPickerProps)
       <Input
         value={query}
         onChange={(e) => setQuery(e.target.value)}
-        placeholder="Search buyers by company or name"
+        placeholder="Search buyers by company, name or email"
         className="border-border-cream bg-card text-text-dark"
       />
 
@@ -105,10 +106,18 @@ export function PrivateBuyerPicker({ value, onChange }: PrivateBuyerPickerProps)
               onChange={() => toggle(buyer.id)}
               className="h-4 w-4 accent-accent"
             />
-            <span>{buyerDisplayName(buyer)}</span>
-            {buyer.company_name && buyer.full_name && (
-              <span className="text-xs text-text-dark-secondary">· {buyer.full_name}</span>
-            )}
+            <span className="flex min-w-0 flex-col">
+              <span className="truncate">
+                {buyerDisplayName(buyer)}
+                {buyer.company_name && buyer.full_name && (
+                  <span className="text-xs text-text-dark-secondary"> · {buyer.full_name}</span>
+                )}
+                {buyer.is_demo && (
+                  <span className="ml-1 text-[10px] uppercase tracking-wide text-accent">demo</span>
+                )}
+              </span>
+              <span className="truncate text-xs text-text-dark-secondary">{buyer.email ?? '—'}</span>
+            </span>
           </label>
         ))}
       </div>

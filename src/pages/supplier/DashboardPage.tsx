@@ -1,21 +1,40 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { BarChart3, Eye, MessageSquare, TrendingUp } from 'lucide-react'
+import { BarChart3, Clock, Eye, MessageSquare, TrendingUp } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { InquiryStatusBadge } from '@/components/shared/InquiryStatusBadge'
 import { TrendChart, type TrendPoint } from '@/components/shared/TrendChart'
+import { useCounterparties } from '@/hooks/useCounterparties'
 import { useProfile } from '@/hooks/useProfile'
-import { normalizeInquiry } from '@/lib/inquiries'
 import { supabase } from '@/lib/supabase'
-import type { InquiryWithRelations, SupplierDashboardStats } from '@/types/app'
+import type { SupplierDashboardStats } from '@/types/app'
+import type { InquiryStatus } from '@/types/database.types'
+
+/** Minutes as "45m" / "3h" / "2d"; a dash when nothing has been answered yet. */
+function durationLabel(minutes: number): string {
+  if (!minutes) return '—'
+  if (minutes < 60) return `${Math.round(minutes)}m`
+  if (minutes < 60 * 24) return `${Math.round(minutes / 60)}h`
+  return `${Math.round(minutes / (60 * 24))}d`
+}
 
 function weekLabel(start: Date): string {
   return start.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 }
 
+interface RecentInquiry {
+  id: string
+  status: InquiryStatus
+  updated_at: string
+  buyer_id: string
+}
+
 export default function SupplierDashboardPage() {
   const { profile } = useProfile()
+  // Buyer names come from get_counterparty_profiles: a supplier cannot read a
+  // buyer's profile row directly, which is why this list used to say "Buyer" (#38).
+  const { nameOf } = useCounterparties()
   const [loading, setLoading] = useState(true)
   const [stats, setStats] = useState<SupplierDashboardStats>({
     total_inquiries: 0,
@@ -24,7 +43,8 @@ export default function SupplierDashboardPage() {
     catalogue_views_week: 0,
     catalogue_views_month: 0,
   })
-  const [recentInquiries, setRecentInquiries] = useState<InquiryWithRelations[]>([])
+  const [medianReplyMinutes, setMedianReplyMinutes] = useState(0)
+  const [recentInquiries, setRecentInquiries] = useState<RecentInquiry[]>([])
   const [inquiryTrend, setInquiryTrend] = useState<TrendPoint[]>([])
 
   useEffect(() => {
@@ -36,7 +56,7 @@ export default function SupplierDashboardPage() {
       const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
       const monthAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
 
-      const [totalRes, openRes, respondedRes, viewsWeekRes, viewsMonthRes, recentRes, trendRes] =
+      const [totalRes, openRes, responseRes, viewsWeekRes, viewsMonthRes, recentRes, trendRes] =
         await Promise.all([
           supabase
             .from('inquiries')
@@ -47,11 +67,9 @@ export default function SupplierDashboardPage() {
             .select('id', { count: 'exact', head: true })
             .eq('supplier_id', supplierId)
             .eq('status', 'open'),
-          supabase
-            .from('inquiries')
-            .select('id', { count: 'exact', head: true })
-            .eq('supplier_id', supplierId)
-            .neq('status', 'open'),
+          // Same RPC as Analytics and admin reports (#22): responded = at least one
+          // supplier message, last 90 days, demo accounts excluded.
+          supabase.rpc('get_supplier_response_stats', { supplier_uuid: supplierId }),
           supabase
             .from('supplier_page_views')
             .select('id', { count: 'exact', head: true })
@@ -64,10 +82,7 @@ export default function SupplierDashboardPage() {
             .gte('viewed_at', monthAgo),
           supabase
             .from('inquiries')
-            .select(`
-              *,
-              buyer:buyers(id, profile:profiles(*))
-            `)
+            .select('id, status, updated_at, buyer_id')
             .eq('supplier_id', supplierId)
             .order('updated_at', { ascending: false })
             .limit(5),
@@ -94,18 +109,17 @@ export default function SupplierDashboardPage() {
       setInquiryTrend(trend)
 
       const total = totalRes.count ?? 0
-      const responded = respondedRes.count ?? 0
+      const response = responseRes.data?.[0]
 
       setStats({
         total_inquiries: total,
         open_inquiries: openRes.count ?? 0,
-        response_rate: total > 0 ? Math.round((responded / total) * 100) : 0,
+        response_rate: Math.round(Number(response?.response_rate ?? 0)),
         catalogue_views_week: viewsWeekRes.count ?? 0,
         catalogue_views_month: viewsMonthRes.count ?? 0,
       })
-      setRecentInquiries(
-        (recentRes.data ?? []).map((row) => normalizeInquiry(row as Record<string, unknown>)),
-      )
+      setMedianReplyMinutes(Number(response?.median_response_minutes ?? 0))
+      setRecentInquiries((recentRes.data ?? []) as RecentInquiry[])
       setLoading(false)
     }
 
@@ -115,7 +129,8 @@ export default function SupplierDashboardPage() {
   const metrics = [
     { label: 'Total Inquiries', value: stats.total_inquiries, icon: MessageSquare },
     { label: 'Open Inquiries', value: stats.open_inquiries, icon: TrendingUp },
-    { label: 'Response Rate', value: `${stats.response_rate}%`, icon: BarChart3 },
+    { label: 'Response Rate (90d)', value: `${stats.response_rate}%`, icon: BarChart3 },
+    { label: 'Median Reply', value: durationLabel(medianReplyMinutes), icon: Clock },
     { label: 'Views (7d)', value: stats.catalogue_views_week, icon: Eye },
   ]
 
@@ -130,7 +145,7 @@ export default function SupplierDashboardPage() {
         </h1>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         {metrics.map(({ label, value, icon: Icon }) => (
           <Card key={label}>
             <CardContent className="flex items-center gap-4 p-6">
@@ -199,7 +214,7 @@ export default function SupplierDashboardPage() {
                   >
                     <div>
                       <p className="text-sm font-medium text-text-dark">
-                        {inq.buyer?.company_name ?? inq.buyer?.full_name ?? 'Buyer'}
+                        {nameOf(inq.buyer_id, 'Buyer')}
                       </p>
                       <p className="font-mono text-[10px] text-text-dark-secondary">
                         {new Date(inq.updated_at).toLocaleDateString()}

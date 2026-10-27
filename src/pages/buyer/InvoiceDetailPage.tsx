@@ -1,14 +1,24 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, Download } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { PaymentStatusBadge } from '@/components/shared/PaymentStatusBadge'
 import { InvoicePreview } from '@/components/invoice/InvoicePreview'
 import { useProfile } from '@/hooks/useProfile'
-import { INVOICE_SELECT, isOverdue, normalizeInvoice, outstandingPkr } from '@/lib/invoices'
+import {
+  INVOICE_SELECT,
+  downloadInvoicePdf,
+  invoicePdfProps,
+  invoiceTotalPkr,
+  isOverdue,
+  normalizeInvoice,
+  outstandingPkr,
+} from '@/lib/invoices'
 import { supabase } from '@/lib/supabase'
 import { formatPrice } from '@/lib/utils'
+import { toast } from '@/stores/toast'
 import type { InvoiceWithRelations } from '@/types/app'
 
 export default function BuyerInvoiceDetailPage() {
@@ -16,6 +26,7 @@ export default function BuyerInvoiceDetailPage() {
   const { profile } = useProfile()
   const [invoice, setInvoice] = useState<InvoiceWithRelations | null>(null)
   const [loading, setLoading] = useState(true)
+  const [downloading, setDownloading] = useState(false)
 
   const profileId = profile?.id
 
@@ -60,6 +71,10 @@ export default function BuyerInvoiceDetailPage() {
 
   const outstanding = outstandingPkr(invoice)
   const payments = invoice.payments ?? []
+  const pdfProps = invoicePdfProps(invoice, {
+    supplierName: invoice.supplier?.brand_name ?? 'Supplier',
+    buyerName: invoice.buyer?.company_name ?? invoice.buyer?.full_name ?? profile.company_name ?? 'Buyer',
+  })
 
   return (
     <div className="space-y-6">
@@ -83,12 +98,51 @@ export default function BuyerInvoiceDetailPage() {
             </CardHeader>
             <CardContent className="space-y-3">
               <Row label="Supplier" value={invoice.supplier?.brand_name ?? '—'} />
-              <Row label="Total" value={formatPrice(invoice.subtotal_pkr ?? 0, 'PKR')} />
+              {invoice.status === 'cancelled' && <Row label="Status" value="Cancelled" />}
+              <Row label="Subtotal" value={formatPrice(invoice.subtotal_pkr ?? 0, 'PKR')} />
+              <Row
+                label={
+                  invoice.tax_mode === 'per_line'
+                    ? 'Tax (per line)'
+                    : `Tax (${invoice.tax_rate_percent ?? 0}%)`
+                }
+                value={formatPrice(invoice.tax_pkr ?? 0, 'PKR')}
+              />
+              <Row label="Freight" value={formatPrice(invoice.freight_pkr ?? 0, 'PKR')} />
+              <Row label="Total" value={formatPrice(invoiceTotalPkr(invoice), 'PKR')} emphasis />
               <Row label="Paid" value={formatPrice(invoice.amount_paid_pkr, 'PKR')} />
               <Row label="Outstanding" value={formatPrice(outstanding, 'PKR')} emphasis />
               {invoice.due_date && (
                 <Row label="Due" value={new Date(invoice.due_date).toLocaleDateString()} />
               )}
+              {invoice.payment_terms && <Row label="Terms" value={invoice.payment_terms} />}
+              {invoice.notes && (
+                <div className="border-t border-border-cream pt-3">
+                  <p className="font-mono text-[10px] uppercase tracking-widest text-text-dark-secondary">
+                    Notes
+                  </p>
+                  <p className="mt-1 whitespace-pre-line text-sm text-text-dark">{invoice.notes}</p>
+                </div>
+              )}
+              <Button
+                size="sm"
+                variant="outline"
+                className="w-full border-border-cream text-text-dark"
+                disabled={downloading}
+                onClick={async () => {
+                  setDownloading(true)
+                  try {
+                    await downloadInvoicePdf(pdfProps)
+                  } catch (e) {
+                    toast.error('Could not create the PDF', e instanceof Error ? e.message : undefined)
+                  } finally {
+                    setDownloading(false)
+                  }
+                }}
+              >
+                <Download className="h-3.5 w-3.5" />
+                {downloading ? 'Preparing…' : 'Download PDF'}
+              </Button>
             </CardContent>
           </Card>
 
@@ -131,16 +185,7 @@ export default function BuyerInvoiceDetailPage() {
         </div>
 
         <div className="border border-border-cream bg-card">
-          <InvoicePreview
-            invoiceNumber={invoice.id.slice(0, 8).toUpperCase()}
-            supplierName={invoice.supplier?.brand_name ?? 'Supplier'}
-            buyerName={invoice.buyer?.company_name ?? invoice.buyer?.full_name ?? 'Buyer'}
-            lineItems={invoice.line_items}
-            subtotalPkr={invoice.subtotal_pkr ?? 0}
-            subtotalUsd={invoice.subtotal_usd ?? 0}
-            notes={invoice.notes ?? undefined}
-            createdAt={invoice.created_at}
-          />
+          <InvoicePreview {...pdfProps} />
         </div>
       </div>
     </div>

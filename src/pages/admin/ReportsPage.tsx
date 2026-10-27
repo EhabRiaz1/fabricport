@@ -88,7 +88,7 @@ export default function AdminReportsPage() {
     <div>
       <AdminPageHeader
         title="Reports"
-        description="Marketplace activity over the last 8 weeks."
+        description="Marketplace activity over the last 8 weeks. Demo accounts are excluded."
       />
 
       <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -101,8 +101,8 @@ export default function AdminReportsPage() {
           }
           hint={
             stats.median_first_response_hours == null
-              ? 'No replies yet'
-              : `median first reply ${stats.median_first_response_hours}h`
+              ? 'Inquiries in the last 90 days with a supplier reply · no replies yet'
+              : `Inquiries in the last 90 days with a supplier reply · median first reply ${stats.median_first_response_hours}h`
           }
         />
         <Stat

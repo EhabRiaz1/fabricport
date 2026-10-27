@@ -7,9 +7,11 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { useSuppliers } from '@/hooks/useSuppliers'
 import { supabase } from '@/lib/supabase'
 import { getProductImageUrl } from '@/lib/utils'
+import { extraBadgeLabel, pluralize } from '@/lib/text'
+import { PageMeta } from '@/components/shared/PageMeta'
 
 export default function VendorsPage() {
-  const { suppliers, loading, error } = useSuppliers({ verifiedOnly: true })
+  const { suppliers, loading, error } = useSuppliers({ verifiedOnly: true, requireProducts: true })
   const [previews, setPreviews] = useState<Record<string, string[]>>({})
 
   // One query: a pool of recent published images, grouped per supplier.
@@ -39,6 +41,11 @@ export default function VendorsPage() {
 
   return (
     <div className="bg-background">
+      <PageMeta
+        title="Verified mills"
+        description="The verified Pakistani mills selling surplus and running fabric on FabricPort. Browse each mill's catalogue and inquire direct."
+        path="/vendors"
+      />
       <PublicNav />
       <main className="mx-auto max-w-7xl px-6 pb-24 pt-28 lg:px-8">
         <div className="max-w-2xl">
@@ -103,12 +110,13 @@ export default function VendorsPage() {
                           {supplier.brand_name}
                         </h2>
                         {supplier.is_verified && (
-                          <BadgeCheck className="h-4 w-4 shrink-0 text-success" />
+                          <BadgeCheck aria-label="Verified" className="h-4 w-4 shrink-0 text-success" />
                         )}
                       </div>
                       <p className="mt-2 font-mono text-[10px] uppercase tracking-[0.2em] text-text-muted">
-                        {supplier.product_count} fabrics
-                        {supplier.badge_label ? ` · ${supplier.badge_label}` : ''}
+                        {pluralize(supplier.product_count, 'fabric')}
+                        {supplier.is_verified ? ' · Verified' : ''}
+                        {extraBadgeLabel(supplier.badge_label) ? ` · ${extraBadgeLabel(supplier.badge_label)}` : ''}
                       </p>
                     </div>
                     <ArrowUpRight className="h-4 w-4 shrink-0 text-text-muted transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-accent" />

@@ -79,8 +79,9 @@ export function CollageHero({ className, videoSrc = '/hero-fabric.mp4' }: Collag
           <Link to="/vendors" className="hidden sm:block font-mono text-[11px] uppercase tracking-widest text-white/60 hover:text-white transition-colors">
             Vendors
           </Link>
-          <Link 
+          <Link
             to="/auth/login"
+            state={{ from: '/' }}
             className="font-mono text-[11px] uppercase tracking-widest text-white/80 hover:text-white transition-colors"
           >
             Sign In

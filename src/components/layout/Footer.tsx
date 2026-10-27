@@ -4,17 +4,18 @@ import { BrandLogo } from '@/components/layout/BrandLogo'
 import { useChatDock } from '@/lib/chat-dock'
 
 /**
- * The "Company" column used to point at /about, /contact and /privacy. None of those are
- * routes in App.tsx, so all three fell through the `*` catch-all and silently redirected to
- * the home page. Rather than stub three pages, the column is now a real way to reach us --
- * which also gives the support widget a second entry point for anyone who scrolls past the
- * bubble without noticing it.
+ * "Talk to us" replaced the old /about and /contact links (neither page exists) with a real
+ * way to reach us. /privacy and /terms are real routes again as of the Oct 2026 fix list.
  */
 const FOOTER_LINKS = {
   Platform: [
     { label: 'Marketplace', href: '/marketplace' },
     { label: 'Vendors', href: '/vendors' },
     { label: 'Join as Supplier', href: '/auth/register' },
+  ],
+  Legal: [
+    { label: 'Privacy Policy', href: '/privacy' },
+    { label: 'Terms of Service', href: '/terms' },
   ],
 } as const
 
@@ -32,7 +33,7 @@ export function Footer({ className }: FooterProps) {
   return (
     <footer className={cn('relative border-t border-[#3C2A1A]/10 bg-[#E2D9C8] overflow-hidden', className)}>
       <div className="relative mx-auto max-w-7xl px-6 pt-16 pb-10 lg:px-8">
-        <div className="grid gap-12 md:grid-cols-4 pb-12 border-b border-[#3C2A1A]/10">
+        <div className="grid gap-12 md:grid-cols-5 pb-12 border-b border-[#3C2A1A]/10">
           <div className="md:col-span-2">
             <BrandLogo imgClassName="brightness-0 opacity-85" />
             <p className="mt-4 max-w-xs text-sm leading-relaxed text-[#3C2A1A]/55">

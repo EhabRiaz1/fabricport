@@ -13,6 +13,7 @@ import { useSupportUnread } from '@/hooks/useSupportUnread'
 import { useChatThreads } from '@/hooks/useChatThreads'
 import { useChatDock } from '@/lib/chat-dock'
 import { useCartUI } from '@/lib/cart'
+import { summarizeTitles } from '@/lib/inquiry-list'
 import { cn } from '@/lib/utils'
 
 /**
@@ -343,9 +344,30 @@ export function ChatDock() {
                   {thread.counterpartName}
                 </span>
                 <span className="block truncate font-mono text-[9px] uppercase tracking-[0.14em] text-[#9C8870]">
-                  {thread.itemCount} fabric{thread.itemCount === 1 ? '' : 's'} · {thread.status}
+                  {thread.itemTitles.length > 0
+                    ? summarizeTitles(thread.itemTitles)
+                    : `${thread.itemCount} fabric${thread.itemCount === 1 ? '' : 's'}`}{' '}
+                  · {thread.status}
                 </span>
+                {thread.lastMessage && (
+                  <span
+                    className={cn(
+                      'mt-0.5 block truncate text-[12px]',
+                      thread.unreadCount > 0 ? 'font-medium text-[#2C1A0E]' : 'text-[#3C2A1A]/60',
+                    )}
+                  >
+                    {thread.lastMessage}
+                  </span>
+                )}
               </span>
+              {thread.unreadCount > 0 && (
+                <span
+                  aria-label={`${thread.unreadCount} unread`}
+                  className="grid h-5 min-w-5 shrink-0 place-items-center rounded-full bg-[#7A4A28] px-1.5 font-mono text-[9px] font-semibold text-white"
+                >
+                  {thread.unreadCount}
+                </span>
+              )}
             </button>
           </li>
         ))}
@@ -370,6 +392,7 @@ export function ChatDock() {
           </Link>
           <Link
             to="/auth/register"
+            state={{ from: pathname }}
             className="w-full border border-[#C8C4BC] py-2.5 font-mono text-[10px] uppercase tracking-[0.18em] text-[#3C2A1A] transition-colors hover:border-[#2C1A0E]"
           >
             Create an account

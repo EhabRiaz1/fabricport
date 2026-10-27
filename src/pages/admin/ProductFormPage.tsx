@@ -254,6 +254,12 @@ export default function ProductFormPage() {
     setAttributeValues((prev) => ({ ...prev, [attrId]: value }))
   }
 
+  function attributeOptions(attr: FabricAttribute): string[] {
+    return Array.isArray(attr.options)
+      ? attr.options.filter((o): o is string => typeof o === 'string' && o.trim() !== '')
+      : []
+  }
+
   function renderAttributeField(attr: FabricAttribute) {
     const value = attributeValues[attr.id]
 
@@ -284,8 +290,40 @@ export default function ProductFormPage() {
             </SelectContent>
           </Select>
         )
+      case 'multiselect': {
+        const options = attributeOptions(attr)
+        if (options.length === 0) break // no options defined: free text below
+        const selected = Array.isArray(value)
+          ? value
+          : typeof value === 'string' && value
+            ? value.split(',').map((s) => s.trim()).filter(Boolean)
+            : []
+        const all = [...options, ...selected.filter((s) => !options.includes(s))]
+        return (
+          <div className="flex flex-wrap gap-x-4 gap-y-2 pt-1">
+            {all.map((opt) => (
+              <label key={opt} className="flex items-center gap-2 text-sm text-text-dark">
+                <input
+                  type="checkbox"
+                  checked={selected.includes(opt)}
+                  onChange={(e) =>
+                    setAttributeValue(
+                      attr.id,
+                      e.target.checked ? [...selected, opt] : selected.filter((s) => s !== opt),
+                    )
+                  }
+                />
+                {opt}
+              </label>
+            ))}
+          </div>
+        )
+      }
       case 'select': {
-        const options = (attr.options as string[] | null) ?? []
+        const options = attributeOptions(attr)
+        if (options.length === 0) break // no options defined: free text below
+        // Keep a legacy value that is not (or no longer) in the option list selectable.
+        if (typeof value === 'string' && value && !options.includes(value)) options.push(value)
         return (
           <Select
             value={typeof value === 'string' ? value : ''}
@@ -304,22 +342,30 @@ export default function ProductFormPage() {
           </Select>
         )
       }
-      default:
-        return (
-          <Input
-            value={typeof value === 'string' || typeof value === 'number' ? String(value) : ''}
-            onChange={(e) => setAttributeValue(attr.id, e.target.value)}
-            className="border-border-cream bg-card text-text-dark"
-          />
-        )
     }
+    return (
+      <Input
+        value={
+          typeof value === 'string' || typeof value === 'number'
+            ? String(value)
+            : Array.isArray(value)
+              ? value.join(', ')
+              : ''
+        }
+        onChange={(e) => setAttributeValue(attr.id, e.target.value)}
+        className="border-border-cream bg-card text-text-dark"
+      />
+    )
   }
 
   async function saveAttributes(productId: string) {
     await supabase.from('product_attributes').delete().eq('product_id', productId)
 
     const rows = attributes
-      .filter((attr) => attributeValues[attr.id] !== undefined && attributeValues[attr.id] !== '')
+      .filter((attr) => {
+        const v = attributeValues[attr.id]
+        return v !== undefined && v !== '' && !(Array.isArray(v) && v.length === 0)
+      })
       .map((attr) => {
         const val = attributeValues[attr.id]
         const row: {

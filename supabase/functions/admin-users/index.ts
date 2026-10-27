@@ -5,7 +5,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-type Action = 'list' | 'create' | 'reset_password' | 'set_status' | 'delete'
+type Action = 'list' | 'create' | 'reset_password' | 'set_status' | 'set_demo' | 'delete'
 
 interface AdminUsersRequest {
   action: Action
@@ -18,6 +18,8 @@ interface AdminUsersRequest {
   whatsapp?: string
   status?: 'active' | 'suspended' | 'pending'
   verifySupplier?: boolean
+  /** set_demo: true marks the account as a demo account (excluded from stats). */
+  isDemo?: boolean
 }
 
 function json(body: unknown, status = 200): Response {
@@ -216,6 +218,26 @@ Deno.serve(async (req) => {
       })
 
       await audit('user.set_status', payload.userId, { status: payload.status })
+      return json({ ok: true })
+    }
+
+    // Demo accounts stay fully usable but are left out of admin reports, the admin
+    // dashboard counters, supplier response stats and visitor analytics.
+    if (payload.action === 'set_demo') {
+      if (!payload.userId || typeof payload.isDemo !== 'boolean') {
+        return json({ ok: false, error: 'userId and isDemo (boolean) required' }, 400)
+      }
+
+      const { data: updated, error: demoError } = await admin
+        .from('profiles')
+        .update({ is_demo: payload.isDemo })
+        .eq('id', payload.userId)
+        .select('id')
+        .maybeSingle()
+      if (demoError) return json({ ok: false, error: demoError.message }, 400)
+      if (!updated) return json({ ok: false, error: 'User not found' }, 404)
+
+      await audit('user.set_demo', payload.userId, { is_demo: payload.isDemo })
       return json({ ok: true })
     }
 

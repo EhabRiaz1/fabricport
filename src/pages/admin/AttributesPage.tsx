@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Plus, Trash2 } from 'lucide-react'
+import { Plus, Trash2, X } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { supabase } from '@/lib/supabase'
+import { toast } from '@/stores/toast'
 import type { FabricAttribute, FabricAttributeType, FabricCategory } from '@/types/database.types'
 import { AdminPageHeader } from './components/AdminPageHeader'
 import {
@@ -42,6 +43,15 @@ interface AttributeForm {
   is_required: boolean
   is_filterable: boolean
   display_order: string
+  options: string[]
+}
+
+const HAS_OPTIONS = (t: FabricAttributeType) => t === 'select' || t === 'multiselect'
+
+function readOptions(options: unknown): string[] {
+  return Array.isArray(options)
+    ? options.filter((o): o is string => typeof o === 'string' && o.trim() !== '')
+    : []
 }
 
 const EMPTY_FORM: AttributeForm = {
@@ -53,6 +63,7 @@ const EMPTY_FORM: AttributeForm = {
   is_required: false,
   is_filterable: true,
   display_order: '0',
+  options: [],
 }
 
 function slugify(text: string) {
@@ -71,6 +82,9 @@ export default function AttributesPage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState<AttributeForm>(EMPTY_FORM)
   const [showForm, setShowForm] = useState(false)
+  const [formError, setFormError] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [newOption, setNewOption] = useState('')
 
   const loadData = useCallback(async () => {
     setLoading(true)
@@ -78,10 +92,33 @@ export default function AttributesPage() {
       supabase.from('fabric_attributes').select('*').order('display_order'),
       supabase.from('fabric_categories').select('*').order('name'),
     ])
+    setLoadError(attrsRes.error?.message ?? catsRes.error?.message ?? null)
     setAttributes(attrsRes.data ?? [])
     setCategories(catsRes.data ?? [])
     setLoading(false)
   }, [])
+
+  function addOption() {
+    const opt = newOption.trim()
+    if (!opt) return
+    if (form.options.some((o) => o.toLowerCase() === opt.toLowerCase())) {
+      setFormError(`"${opt}" is already an option.`)
+      return
+    }
+    setForm((f) => ({ ...f, options: [...f.options, opt] }))
+    setNewOption('')
+    setFormError(null)
+  }
+
+  function moveOption(index: number, delta: -1 | 1) {
+    setForm((f) => {
+      const next = [...f.options]
+      const j = index + delta
+      if (j < 0 || j >= next.length) return f
+      ;[next[index], next[j]] = [next[j], next[index]]
+      return { ...f, options: next }
+    })
+  }
 
   useEffect(() => {
     loadData()
@@ -90,6 +127,8 @@ export default function AttributesPage() {
   function startCreate() {
     setEditingId(null)
     setForm(EMPTY_FORM)
+    setFormError(null)
+    setNewOption('')
     setShowForm(true)
   }
 
@@ -104,12 +143,27 @@ export default function AttributesPage() {
       is_required: attr.is_required,
       is_filterable: attr.is_filterable,
       display_order: String(attr.display_order),
+      options: readOptions(attr.options),
     })
+    setFormError(null)
+    setNewOption('')
     setShowForm(true)
   }
 
   async function handleSave() {
-    if (!form.name.trim() || !form.slug.trim()) return
+    if (!form.name.trim() || !form.slug.trim()) {
+      setFormError('Name and slug are required.')
+      return
+    }
+    if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(form.slug.trim())) {
+      setFormError('Slug may only contain lowercase letters, numbers and single dashes.')
+      return
+    }
+    if (HAS_OPTIONS(form.type) && form.options.length === 0) {
+      setFormError('Add at least one option for a select or multiselect attribute.')
+      return
+    }
+    setFormError(null)
 
     setSaving(true)
     const payload = {
@@ -121,15 +175,24 @@ export default function AttributesPage() {
       is_required: form.is_required,
       is_filterable: form.is_filterable,
       display_order: Number(form.display_order) || 0,
+      // Options only mean something for select/multiselect; other types keep theirs
+      // untouched so switching type back and forth does not lose the list.
+      ...(HAS_OPTIONS(form.type) ? { options: form.options } : {}),
     }
 
-    if (editingId) {
-      await supabase.from('fabric_attributes').update(payload).eq('id', editingId)
-    } else {
-      await supabase.from('fabric_attributes').insert(payload)
-    }
+    const { error } = editingId
+      ? await supabase.from('fabric_attributes').update(payload).eq('id', editingId)
+      : await supabase.from('fabric_attributes').insert(payload)
 
     setSaving(false)
+    if (error) {
+      const msg =
+        error.code === '23505' ? `An attribute with the slug "${payload.slug}" already exists.` : error.message
+      setFormError(msg)
+      toast.error('Could not save attribute', msg)
+      return
+    }
+    toast.success(editingId ? 'Attribute updated' : 'Attribute created')
     setShowForm(false)
     setForm(EMPTY_FORM)
     setEditingId(null)
@@ -137,8 +200,13 @@ export default function AttributesPage() {
   }
 
   async function handleDelete(id: string) {
-    if (!confirm('Delete this attribute?')) return
-    await supabase.from('fabric_attributes').delete().eq('id', id)
+    if (!confirm('Delete this attribute? Values stored on products for it are removed too.')) return
+    const { error } = await supabase.from('fabric_attributes').delete().eq('id', id)
+    if (error) {
+      toast.error('Could not delete attribute', error.message)
+      return
+    }
+    toast.success('Attribute deleted')
     loadData()
   }
 
@@ -245,6 +313,72 @@ export default function AttributesPage() {
                 />
               </div>
             </div>
+            {HAS_OPTIONS(form.type) && (
+              <div className="space-y-2">
+                <Label htmlFor="attr-new-option">Options</Label>
+                {form.options.length === 0 ? (
+                  <p className="text-xs text-text-dark-secondary">
+                    No options yet. Products will show a dropdown with these values.
+                  </p>
+                ) : (
+                  <ol className="divide-y divide-border-cream border border-border-cream">
+                    {form.options.map((opt, i) => (
+                      <li key={opt} className="flex items-center gap-2 px-3 py-1.5 text-sm text-text-dark">
+                        <span className="flex-1">{opt}</span>
+                        <button
+                          type="button"
+                          className="px-1 text-xs text-text-dark-secondary hover:text-text-dark disabled:opacity-30"
+                          onClick={() => moveOption(i, -1)}
+                          disabled={i === 0}
+                          aria-label={`Move ${opt} up`}
+                        >
+                          ↑
+                        </button>
+                        <button
+                          type="button"
+                          className="px-1 text-xs text-text-dark-secondary hover:text-text-dark disabled:opacity-30"
+                          onClick={() => moveOption(i, 1)}
+                          disabled={i === form.options.length - 1}
+                          aria-label={`Move ${opt} down`}
+                        >
+                          ↓
+                        </button>
+                        <button
+                          type="button"
+                          className="text-text-dark-secondary hover:text-danger"
+                          onClick={() =>
+                            setForm((f) => ({ ...f, options: f.options.filter((o) => o !== opt) }))
+                          }
+                          aria-label={`Remove ${opt}`}
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </li>
+                    ))}
+                  </ol>
+                )}
+                <div className="flex max-w-md gap-2">
+                  <Input
+                    id="attr-new-option"
+                    value={newOption}
+                    onChange={(e) => setNewOption(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        addOption()
+                      }
+                    }}
+                    placeholder="Add an option"
+                    maxLength={80}
+                    className="border-border-cream bg-card text-text-dark"
+                  />
+                  <Button type="button" variant="outline" onClick={addOption}>
+                    <Plus className="h-4 w-4" />
+                    Add
+                  </Button>
+                </div>
+              </div>
+            )}
             <div className="flex flex-wrap gap-4">
               <label className="flex items-center gap-2 text-sm text-text-dark">
                 <input
@@ -263,6 +397,11 @@ export default function AttributesPage() {
                 Filterable
               </label>
             </div>
+            {formError && (
+              <p role="alert" className="text-sm text-danger">
+                {formError}
+              </p>
+            )}
             <div className="flex gap-2">
               <Button disabled={saving} onClick={handleSave}>
                 {editingId ? 'Update' : 'Create'}
@@ -281,6 +420,10 @@ export default function AttributesPage() {
             <div className="p-6">
               <Skeleton className="h-48 w-full bg-border-cream" />
             </div>
+          ) : loadError ? (
+            <p role="alert" className="p-6 text-sm text-danger">
+              Could not load attributes: {loadError}
+            </p>
           ) : attributes.length === 0 ? (
             <p className="p-6 text-sm text-text-dark-secondary">No attributes defined.</p>
           ) : (
@@ -298,7 +441,14 @@ export default function AttributesPage() {
                   <AdminTableRow key={attr.id}>
                     <AdminTableCell className="font-medium">{attr.name}</AdminTableCell>
                     <AdminTableCell className="font-mono text-xs">{attr.slug}</AdminTableCell>
-                    <AdminTableCell>{attr.type}</AdminTableCell>
+                    <AdminTableCell>
+                      {attr.type}
+                      {HAS_OPTIONS(attr.type) && (
+                        <span className="block max-w-[220px] truncate text-xs text-text-dark-secondary">
+                          {readOptions(attr.options).join(', ') || 'no options'}
+                        </span>
+                      )}
+                    </AdminTableCell>
                     <AdminTableCell>{attr.unit ?? '—'}</AdminTableCell>
                     <AdminTableCell className="text-xs text-text-dark-secondary">
                       {attr.is_required && 'required '}

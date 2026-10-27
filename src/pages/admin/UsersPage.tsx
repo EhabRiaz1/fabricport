@@ -3,6 +3,7 @@ import {
   Ban,
   CheckCircle2,
   Copy,
+  FlaskConical,
   KeyRound,
   Search,
   ShieldCheck,
@@ -31,6 +32,7 @@ import {
   AdminTableRow,
 } from '@/pages/admin/components/AdminTable'
 import { AdminPageHeader } from '@/pages/admin/components/AdminPageHeader'
+import { FunctionsHttpError } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
 import { toast } from '@/stores/toast'
@@ -64,7 +66,14 @@ async function callAdminUsers<T = Record<string, unknown>>(
   body: Record<string, unknown>,
 ): Promise<T> {
   const { data, error } = await supabase.functions.invoke('admin-users', { body })
-  if (error) throw new Error(error.message)
+  if (error) {
+    // Non-2xx responses carry {ok:false, error} in the body; show that, not "non-2xx".
+    if (error instanceof FunctionsHttpError) {
+      const detail = await error.context.json().catch(() => null)
+      if (detail?.error) throw new Error(String(detail.error))
+    }
+    throw new Error(error.message)
+  }
   if (data && data.ok === false) throw new Error(data.error ?? 'Request failed')
   return data as T
 }
@@ -182,6 +191,26 @@ export default function UsersPage() {
     setBusyId(null)
   }
 
+  async function handleToggleDemo(user: AdminUser) {
+    const next = !user.profile?.is_demo
+    setBusyId(user.id)
+    try {
+      await callAdminUsers({ action: 'set_demo', userId: user.id, isDemo: next })
+      setUsers((prev) =>
+        prev.map((u) =>
+          u.id === user.id && u.profile ? { ...u, profile: { ...u.profile, is_demo: next } } : u,
+        ),
+      )
+      toast.success(
+        next ? 'Marked as demo account' : 'Demo flag removed',
+        next ? 'Excluded from reports, dashboard counts and analytics' : undefined,
+      )
+    } catch (err) {
+      toast.error('Could not change demo flag', err instanceof Error ? err.message : undefined)
+    }
+    setBusyId(null)
+  }
+
   async function handleDelete(user: AdminUser) {
     if (!window.confirm(`Permanently delete ${user.email}? This cannot be undone.`)) return
     setBusyId(user.id)
@@ -291,6 +320,14 @@ export default function UsersPage() {
                           {role === 'admin' && <ShieldCheck className="h-3 w-3" />}
                           {role}
                         </span>
+                        {user.profile?.is_demo && (
+                          <span
+                            className="ml-1.5 inline-flex items-center px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.12em] bg-warning/15 text-warning"
+                            title="Demo account: excluded from reports and analytics"
+                          >
+                            Demo
+                          </span>
+                        )}
                       </AdminTableCell>
                       <AdminTableCell>
                         <span
@@ -337,6 +374,21 @@ export default function UsersPage() {
                             ) : (
                               <Ban className="h-4 w-4" />
                             )}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            title={
+                              user.profile?.is_demo
+                                ? 'Demo account: click to include in stats again'
+                                : 'Mark as demo account (exclude from stats)'
+                            }
+                            aria-pressed={Boolean(user.profile?.is_demo)}
+                            disabled={busyId === user.id || !user.profile}
+                            onClick={() => handleToggleDemo(user)}
+                            className={user.profile?.is_demo ? 'text-warning' : 'text-text-dark-secondary'}
+                          >
+                            <FlaskConical className="h-4 w-4" />
                           </Button>
                           <Button
                             variant="ghost"

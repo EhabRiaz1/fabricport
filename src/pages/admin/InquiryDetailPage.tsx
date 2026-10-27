@@ -8,16 +8,13 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { supabase } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
 import { AttachmentList } from '@/components/chat/AttachmentList'
-import type { InquiryStatus, Message, Profile } from '@/types/database.types'
+import { InquirySummary } from '@/components/shared/InquirySummary'
+import { INQUIRY_BASE_SELECT, INQUIRY_ITEMS_SELECT, normalizeInquiry } from '@/lib/inquiries'
+import type { InquiryWithRelations } from '@/types/app'
+import type { Message, Profile } from '@/types/database.types'
 import { AdminPageHeader } from './components/AdminPageHeader'
 
-interface InquiryDetail {
-  id: string
-  status: InquiryStatus
-  created_at: string
-  buyer?: Profile | null
-  supplier?: { brand_name: string; slug: string } | null
-}
+const INQUIRY_SELECT = `${INQUIRY_BASE_SELECT}, ${INQUIRY_ITEMS_SELECT}`
 
 interface MessageRow extends Message {
   sender?: Profile | null
@@ -25,24 +22,17 @@ interface MessageRow extends Message {
 
 export default function InquiryDetailPage() {
   const { id } = useParams<{ id: string }>()
-  const [inquiry, setInquiry] = useState<InquiryDetail | null>(null)
+  const [inquiry, setInquiry] = useState<InquiryWithRelations | null>(null)
   const [messages, setMessages] = useState<MessageRow[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
 
   const loadInquiry = useCallback(async () => {
     if (!id) return
 
     setLoading(true)
     const [inquiryRes, messagesRes] = await Promise.all([
-      supabase
-        .from('inquiries')
-        .select(`
-          id, status, created_at,
-          buyer:buyers(profile:profiles(*)),
-          supplier:suppliers(brand_name, slug)
-        `)
-        .eq('id', id)
-        .maybeSingle(),
+      supabase.from('inquiries').select(INQUIRY_SELECT).eq('id', id).maybeSingle(),
       supabase
         .from('messages')
         .select('*, sender:profiles(*)')
@@ -50,27 +40,10 @@ export default function InquiryDetailPage() {
         .order('created_at', { ascending: true }),
     ])
 
-    if (inquiryRes.data) {
-      const buyer = Array.isArray(inquiryRes.data.buyer)
-        ? inquiryRes.data.buyer[0]
-        : inquiryRes.data.buyer
-      const profile = buyer?.profile
-        ? Array.isArray(buyer.profile)
-          ? buyer.profile[0]
-          : buyer.profile
-        : null
-      const supplier = Array.isArray(inquiryRes.data.supplier)
-        ? inquiryRes.data.supplier[0]
-        : inquiryRes.data.supplier
-
-      setInquiry({
-        id: inquiryRes.data.id,
-        status: inquiryRes.data.status,
-        created_at: inquiryRes.data.created_at,
-        buyer: profile,
-        supplier,
-      })
-    }
+    setLoadError(inquiryRes.error?.message ?? messagesRes.error?.message ?? null)
+    setInquiry(
+      inquiryRes.data ? normalizeInquiry(inquiryRes.data as Record<string, unknown>) : null,
+    )
 
     setMessages(
       (messagesRes.data ?? []).map((msg) => ({
@@ -98,6 +71,11 @@ export default function InquiryDetailPage() {
     return (
       <div>
         <AdminPageHeader title="Inquiry Not Found" />
+        {loadError && (
+          <p role="alert" className="mb-4 text-sm text-danger">
+            Could not load inquiry: {loadError}
+          </p>
+        )}
         <Button variant="ghost" asChild>
           <Link to="/admin/inquiries">
             <ArrowLeft className="h-4 w-4" />
@@ -155,7 +133,8 @@ export default function InquiryDetailPage() {
         </Card>
       </div>
 
-      <Card>
+      <div className="grid gap-6 lg:grid-cols-3">
+      <Card className="lg:col-span-2">
         <CardHeader>
           <CardTitle>Messages</CardTitle>
         </CardHeader>
@@ -195,6 +174,10 @@ export default function InquiryDetailPage() {
           )}
         </CardContent>
       </Card>
+      <div>
+        <InquirySummary inquiry={inquiry} viewerRole="supplier" />
+      </div>
+      </div>
     </div>
   )
 }

@@ -8,6 +8,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { TrendChart, type TrendPoint } from '@/components/shared/TrendChart'
 import { subscribePresence, type PresenceEntry } from '@/lib/track'
 import { supabase } from '@/lib/supabase'
+import { callRpc } from '@/lib/settings'
 import type { AdminDashboardStats } from '@/types/app'
 import type { AdminAuditLog } from '@/types/database.types'
 import { AdminPageHeader } from './components/AdminPageHeader'
@@ -21,6 +22,27 @@ const AUDIT_LABELS: Record<string, string> = {
   'user.reset_password': 'reset a password',
   'user.set_status': 'changed account status',
   'user.delete': 'deleted an account',
+  'user.set_demo': 'changed a demo flag',
+}
+
+/** Shape returned by get_admin_dashboard_counts (20261027160000). Demo accounts excluded. */
+interface DashboardCounts {
+  total_products: number
+  active_suppliers: number
+  registered_buyers: number
+  inquiries_this_month: number
+  pending_listing_requests: number
+  pending_price_approvals: number
+  inquiry_weeks: Array<{ week: string; count: number }>
+  demo_accounts: number
+}
+
+/** Monday 00:00 UTC of the week containing `d`, as YYYY-MM-DD (matches date_trunc('week')). */
+function isoWeekStart(d: Date): string {
+  const utc = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()))
+  const dow = (utc.getUTCDay() + 6) % 7
+  utc.setUTCDate(utc.getUTCDate() - dow)
+  return utc.toISOString().slice(0, 10)
 }
 
 export default function DashboardPage() {
@@ -29,8 +51,52 @@ export default function DashboardPage() {
   const [inquiryTrend, setInquiryTrend] = useState<TrendPoint[]>([])
   const [auditLog, setAuditLog] = useState<AdminAuditLog[]>([])
   const [loading, setLoading] = useState(true)
+  const [demoNote, setDemoNote] = useState<string | null>(null)
 
   const loadDashboard = useCallback(async () => {
+    const [countsRes, auditOnly] = await Promise.all([
+      callRpc<DashboardCounts>('get_admin_dashboard_counts')
+        .then((data) => ({ data, error: null as string | null }))
+        .catch((e: unknown) => ({ data: null, error: e instanceof Error ? e.message : 'failed' })),
+      supabase
+        .from('admin_audit_log')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(8),
+    ])
+
+    if (countsRes.data) {
+      const c = countsRes.data
+      setStats({
+        total_products: c.total_products ?? 0,
+        active_suppliers: c.active_suppliers ?? 0,
+        registered_buyers: c.registered_buyers ?? 0,
+        inquiries_this_month: c.inquiries_this_month ?? 0,
+        live_users: 0,
+        pending_listing_requests: c.pending_listing_requests ?? 0,
+        pending_price_approvals: c.pending_price_approvals ?? 0,
+      })
+      const byWeek = new Map((c.inquiry_weeks ?? []).map((w) => [String(w.week).slice(0, 10), w.count]))
+      const trend: TrendPoint[] = []
+      for (let i = 7; i >= 0; i--) {
+        const d = new Date(Date.now() - i * 7 * 24 * 60 * 60 * 1000)
+        const key = isoWeekStart(d)
+        trend.push({ label: weekLabel(new Date(`${key}T00:00:00Z`)), value: Number(byWeek.get(key) ?? 0) })
+      }
+      setInquiryTrend(trend)
+      setDemoNote(
+        c.demo_accounts > 0
+          ? `${c.demo_accounts} demo account${c.demo_accounts === 1 ? '' : 's'} excluded from these counts.`
+          : null,
+      )
+      setAuditLog((auditOnly.data ?? []) as AdminAuditLog[])
+      setLoading(false)
+      return
+    }
+
+    // Fallback while get_admin_dashboard_counts is not deployed: direct counts,
+    // which cannot exclude demo accounts.
+    setDemoNote(`Demo accounts are included (counts RPC unavailable: ${countsRes.error}).`)
     const monthStart = new Date()
     monthStart.setDate(1)
     monthStart.setHours(0, 0, 0, 0)
@@ -140,6 +206,11 @@ export default function DashboardPage() {
         title="Dashboard"
         description="Live platform metrics and system alerts."
       />
+      {demoNote && (
+        <p className="-mt-2 mb-4 font-mono text-[10px] uppercase tracking-widest text-text-secondary">
+          {demoNote}
+        </p>
+      )}
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         {loading

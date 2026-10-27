@@ -28,13 +28,28 @@ export default function BuyersPage() {
   const [buyers, setBuyers] = useState<BuyerRow[]>([])
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState<string | null>(null)
+  const [emails, setEmails] = useState<Map<string, string>>(new Map())
+  const [emailError, setEmailError] = useState<string | null>(null)
 
   const loadBuyers = useCallback(async () => {
     setLoading(true)
-    const { data, error } = await supabase
-      .from('buyers')
-      .select('id, email_domain, created_at, profile:profiles(*)')
-      .order('created_at', { ascending: false })
+    // Full email addresses live in auth.users, which only the admin-users function
+    // (service role) can read. The buyers table only keeps the domain.
+    const [{ data, error }, listRes] = await Promise.all([
+      supabase
+        .from('buyers')
+        .select('id, email_domain, created_at, profile:profiles(*)')
+        .order('created_at', { ascending: false }),
+      supabase.functions.invoke('admin-users', { body: { action: 'list' } }),
+    ])
+
+    if (listRes.error || listRes.data?.ok === false) {
+      setEmailError(listRes.error?.message ?? listRes.data?.error ?? 'Could not load emails')
+    } else {
+      setEmailError(null)
+      const users = (listRes.data?.users ?? []) as Array<{ id: string; email: string | null }>
+      setEmails(new Map(users.filter((u) => u.email).map((u) => [u.id, u.email as string])))
+    }
 
     if (!error) {
       setBuyers(
@@ -98,6 +113,11 @@ export default function BuyersPage() {
         title="Buyers"
         description="Registered buyer accounts on the platform."
       />
+      {emailError && (
+        <p role="alert" className="mb-4 text-sm text-danger">
+          Could not load email addresses ({emailError}). Showing email domains only.
+        </p>
+      )}
 
       <Card>
         <CardContent className="p-0">
@@ -112,7 +132,7 @@ export default function BuyersPage() {
               <AdminTableHead>
                 <AdminTableHeaderCell>Name</AdminTableHeaderCell>
                 <AdminTableHeaderCell>Company</AdminTableHeaderCell>
-                <AdminTableHeaderCell>Email Domain</AdminTableHeaderCell>
+                <AdminTableHeaderCell>Email</AdminTableHeaderCell>
                 <AdminTableHeaderCell>Status</AdminTableHeaderCell>
                 <AdminTableHeaderCell>Joined</AdminTableHeaderCell>
                 <AdminTableHeaderCell>Actions</AdminTableHeaderCell>
@@ -124,10 +144,21 @@ export default function BuyersPage() {
                   <AdminTableRow key={buyer.id}>
                     <AdminTableCell className="font-medium">
                       {buyer.profile?.full_name ?? '—'}
+                      {buyer.profile?.is_demo && (
+                        <span className="ml-2 bg-warning/15 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-widest text-warning">
+                          demo
+                        </span>
+                      )}
                     </AdminTableCell>
                     <AdminTableCell>{buyer.profile?.company_name ?? '—'}</AdminTableCell>
-                    <AdminTableCell className="font-mono text-xs">
-                      {buyer.email_domain ?? '—'}
+                    <AdminTableCell className="font-mono text-xs [overflow-wrap:anywhere]">
+                      {emails.get(buyer.id) ? (
+                        <a href={`mailto:${emails.get(buyer.id)}`} className="hover:text-accent">
+                          {emails.get(buyer.id)}
+                        </a>
+                      ) : (
+                        buyer.email_domain ?? '—'
+                      )}
                     </AdminTableCell>
                     <AdminTableCell>
                       <span className={cn(suspended && 'text-danger')}>

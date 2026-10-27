@@ -160,6 +160,18 @@ export interface InvoiceLineItem {
   unit_price_usd: number
   total_pkr?: number
   total_usd?: number
+  /** Only read when the invoice's tax_mode is 'per_line'; defaults to the invoice rate. */
+  tax_rate_percent?: number | null
+}
+
+export type InvoiceTaxMode = 'total' | 'per_line'
+
+/** Shape of app_settings.invoice_defaults. */
+export interface InvoiceDefaults {
+  tax_rate_percent: number
+  tax_mode: InvoiceTaxMode
+  freight_pkr: number
+  payment_terms: string
 }
 
 export interface Database {
@@ -1324,6 +1336,7 @@ export interface Database {
           supplier_id: string
           buyer_id: string
           line_items: InvoiceLineItem[]
+          /** DERIVED by compute_invoice_totals from line_items. */
           subtotal_pkr: number | null
           subtotal_usd: number | null
           notes: string | null
@@ -1331,12 +1344,20 @@ export interface Database {
           pdf_url: string | null
           created_at: string
           sent_at: string | null
-          /** Stamped on send (sent_at + 30 days). Null while draft. */
+          /** Set by the supplier while drafting, else stamped on send (sent_at + 30 days). */
           due_date: string | null
           /** DERIVED by the payments trigger — never write from a client. */
           amount_paid_pkr: number
           /** DERIVED by the payments trigger — never write from a client. */
           payment_status: PaymentStatus
+          tax_rate_percent: number
+          tax_mode: InvoiceTaxMode
+          /** DERIVED by compute_invoice_totals. */
+          tax_pkr: number
+          freight_pkr: number
+          payment_terms: string | null
+          /** DERIVED: subtotal + tax + freight. */
+          total_pkr: number | null
         }
         Insert: {
           id?: string
@@ -1344,25 +1365,30 @@ export interface Database {
           supplier_id: string
           buyer_id: string
           line_items: InvoiceLineItem[]
-          subtotal_pkr?: number | null
-          subtotal_usd?: number | null
           notes?: string | null
           status?: InvoiceStatus
           pdf_url?: string | null
           created_at?: string
-          sent_at?: string | null
+          due_date?: string | null
+          tax_rate_percent?: number
+          tax_mode?: InvoiceTaxMode
+          freight_pkr?: number
+          payment_terms?: string | null
         }
-        // due_date / amount_paid_pkr / payment_status are intentionally absent:
-        // the guard trigger rejects non-admin writes and the payments trigger owns
-        // the derived pair. Keeping them out makes that a compile error.
+        // amount_paid_pkr / payment_status / sent_at and the derived totals are
+        // intentionally absent: triggers own them. Keeping them out makes a stray
+        // client write a compile error.
         Update: {
           id?: string
           line_items?: InvoiceLineItem[]
-          subtotal_pkr?: number | null
-          subtotal_usd?: number | null
           notes?: string | null
           status?: InvoiceStatus
           pdf_url?: string | null
+          due_date?: string | null
+          tax_rate_percent?: number
+          tax_mode?: InvoiceTaxMode
+          freight_pkr?: number
+          payment_terms?: string | null
         }
         Relationships: [
           {
@@ -1620,9 +1646,37 @@ export interface Database {
         }
         Relationships: []
       }
+      app_settings: {
+        Row: {
+          key: string
+          value: Json
+          updated_at: string
+        }
+        Insert: {
+          key: string
+          value: Json
+          updated_at?: string
+        }
+        Update: {
+          key?: string
+          value?: Json
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: Record<string, never>
     Functions: {
+      create_catalogue_inquiry: {
+        Args: {
+          p_token: string
+          p_product_id: string
+          p_quantity_meters: number
+          p_message?: string | null
+        }
+        /** the new inquiry id */
+        Returns: string
+      }
       get_supplier_visitor_stats: {
         Args: { supplier_uuid: string; since?: string }
         Returns: {
@@ -1642,6 +1696,10 @@ export interface Database {
           p_referrer?: string | null
           p_session?: string | null
         }
+        Returns: undefined
+      }
+      record_recent_view: {
+        Args: { p_product: string }
         Returns: undefined
       }
       get_supplier_response_stats: {

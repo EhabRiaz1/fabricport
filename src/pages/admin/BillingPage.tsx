@@ -33,6 +33,7 @@ import {
   INVOICE_SELECT,
   PAYMENT_METHODS,
   deletePayment,
+  invoiceTotalPkr,
   isOverdue,
   normalizeInvoice,
   outstandingPkr,
@@ -213,7 +214,7 @@ export default function AdminBillingPage() {
                   <AdminTableCell>
                     {invoice.buyer?.company_name ?? invoice.buyer?.full_name ?? '—'}
                   </AdminTableCell>
-                  <AdminTableCell>{formatPrice(invoice.subtotal_pkr ?? 0, 'PKR')}</AdminTableCell>
+                  <AdminTableCell>{formatPrice(invoiceTotalPkr(invoice), 'PKR')}</AdminTableCell>
                   <AdminTableCell>{formatPrice(invoice.amount_paid_pkr, 'PKR')}</AdminTableCell>
                   <AdminTableCell>{formatPrice(outstandingPkr(invoice), 'PKR')}</AdminTableCell>
                   <AdminTableCell>

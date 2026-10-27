@@ -14,10 +14,15 @@ import { usePreferencesStore, type InventoryView } from '@/stores/preferences'
 import { InventoryGridCard } from '@/pages/supplier/components/InventoryGridCard'
 import {
   draftFromProduct,
+  INVENTORY_PRODUCT_SELECT,
+  NumberField,
   ProductEditDialog,
   saveProductDraft,
+  useWeaveAttribute,
+  validateDraft,
   type ProductDraft,
 } from '@/pages/supplier/components/ProductEditDialog'
+import { getComposition, getGsmLabelShort, getWidth } from '@/lib/product-specs'
 import type { ProductWithRelations } from '@/types/app'
 import type { ProductVisibility } from '@/types/database.types'
 
@@ -42,6 +47,9 @@ export default function SupplierInventoryPage() {
   const [drafts, setDrafts] = useState<Record<string, ProductDraft>>({})
   const [search, setSearch] = useState('')
   const [editing, setEditing] = useState<ProductWithRelations | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [showErrorsFor, setShowErrorsFor] = useState<Set<string>>(() => new Set())
+  const weaveAttr = useWeaveAttribute()
   const view = usePreferencesStore((s) => s.inventoryView)
   const setView = usePreferencesStore((s) => s.setInventoryView)
 
@@ -50,12 +58,17 @@ export default function SupplierInventoryPage() {
   const loadProducts = useCallback(async () => {
     if (!profileId) return
     setLoading(true)
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('products')
-      .select('*, category:fabric_categories(*)')
+      .select(INVENTORY_PRODUCT_SELECT)
       .eq('supplier_id', profileId)
-      .order('updated_at', { ascending: false })
+      // Stable order: sorting by updated_at made a fabric jump to the top every time
+      // it was saved, so the row being edited moved out from under the cursor.
+      .order('title', { ascending: true })
+      .order('created_at', { ascending: true })
+      .order('id', { ascending: true })
 
+    if (error) setLoadError(error.message)
     const list = (data ?? []) as ProductWithRelations[]
     setProducts(list)
     setDrafts(Object.fromEntries(list.map((p) => [p.id, draftFromProduct(p)])))
@@ -66,13 +79,30 @@ export default function SupplierInventoryPage() {
     loadProducts()
   }, [loadProducts])
 
-  async function saveProduct(productId: string) {
-    const draft = drafts[productId]
-    if (!draft) return
+  /** Swap one saved row into the list in place -- no refetch, no skeleton flash. */
+  function replaceProduct(saved: ProductWithRelations) {
+    setProducts((prev) => prev.map((p) => (p.id === saved.id ? { ...p, ...saved } : p)))
+    setDrafts((prev) => ({ ...prev, [saved.id]: draftFromProduct(saved) }))
+  }
 
-    setSavingId(productId)
-    const ok = await saveProductDraft(productId, draft)
-    if (ok) await loadProducts()
+  async function saveProduct(product: ProductWithRelations) {
+    const draft = drafts[product.id]
+    if (!draft || savingId) return
+    if (Object.keys(validateDraft(draft)).length > 0) {
+      setShowErrorsFor((prev) => new Set(prev).add(product.id))
+      return
+    }
+
+    setSavingId(product.id)
+    const saved = await saveProductDraft(product, draft, weaveAttr?.id)
+    if (saved) {
+      replaceProduct(saved)
+      setShowErrorsFor((prev) => {
+        const next = new Set(prev)
+        next.delete(product.id)
+        return next
+      })
+    }
     setSavingId(null)
   }
 
@@ -143,6 +173,8 @@ export default function SupplierInventoryPage() {
         </div>
       </div>
 
+      {loadError && <p className="text-sm text-danger">Could not load your fabrics: {loadError}</p>}
+
       {visibleProducts.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center text-text-dark-secondary">
@@ -186,73 +218,51 @@ export default function SupplierInventoryPage() {
                     <p className="mt-1 text-xs text-text-dark-secondary">
                       {product.category?.name ?? 'Uncategorized'}
                     </p>
+                    <SpecLine product={product} />
                   </div>
                 </div>
                 <StatusBadge status={product.status} />
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-                  <div>
-                    <label className="mb-1 block font-mono text-[10px] uppercase tracking-widest text-text-dark-secondary">
-                      Stock (m)
-                    </label>
-                    <Input
-                      type="number"
-                      min={0}
-                      value={drafts[product.id]?.stock ?? ''}
-                      onChange={(e) => updateDraft(product.id, { stock: e.target.value })}
-                      className="border-border-cream bg-card-hover text-text-dark"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block font-mono text-[10px] uppercase tracking-widest text-text-dark-secondary">
-                      Min Price PKR
-                    </label>
-                    <Input
-                      type="number"
-                      min={0}
-                      value={drafts[product.id]?.priceMin ?? ''}
-                      onChange={(e) => updateDraft(product.id, { priceMin: e.target.value })}
-                      className="border-border-cream bg-card-hover text-text-dark"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block font-mono text-[10px] uppercase tracking-widest text-text-dark-secondary">
-                      Max Price PKR
-                    </label>
-                    <Input
-                      type="number"
-                      min={0}
-                      value={drafts[product.id]?.priceMax ?? ''}
-                      onChange={(e) => updateDraft(product.id, { priceMax: e.target.value })}
-                      className="border-border-cream bg-card-hover text-text-dark"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block font-mono text-[10px] uppercase tracking-widest text-text-dark-secondary">
-                      MOQ (m)
-                    </label>
-                    <Input
-                      type="number"
-                      min={0}
-                      value={drafts[product.id]?.moq ?? ''}
-                      onChange={(e) => updateDraft(product.id, { moq: e.target.value })}
-                      className="border-border-cream bg-card-hover text-text-dark"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block font-mono text-[10px] uppercase tracking-widest text-text-dark-secondary">
-                      Lead time (days)
-                    </label>
-                    <Input
-                      type="number"
-                      min={0}
-                      value={drafts[product.id]?.leadTime ?? ''}
-                      onChange={(e) => updateDraft(product.id, { leadTime: e.target.value })}
-                      className="border-border-cream bg-card-hover text-text-dark"
-                    />
-                  </div>
-                </div>
+                {(() => {
+                  const draft = drafts[product.id]
+                  const errors =
+                    draft && showErrorsFor.has(product.id) ? validateDraft(draft) : {}
+                  return (
+                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+                      <NumberField
+                        label="Stock (m)"
+                        value={draft?.stock ?? ''}
+                        error={errors.stock}
+                        onChange={(v) => updateDraft(product.id, { stock: v })}
+                      />
+                      <NumberField
+                        label="Min Price PKR"
+                        value={draft?.priceMin ?? ''}
+                        error={errors.priceMin}
+                        onChange={(v) => updateDraft(product.id, { priceMin: v })}
+                      />
+                      <NumberField
+                        label="Max Price PKR"
+                        value={draft?.priceMax ?? ''}
+                        error={errors.priceMax}
+                        onChange={(v) => updateDraft(product.id, { priceMax: v })}
+                      />
+                      <NumberField
+                        label="MOQ (m)"
+                        value={draft?.moq ?? ''}
+                        error={errors.moq}
+                        onChange={(v) => updateDraft(product.id, { moq: v })}
+                      />
+                      <NumberField
+                        label="Lead time (days)"
+                        value={draft?.leadTime ?? ''}
+                        error={errors.leadTime}
+                        onChange={(v) => updateDraft(product.id, { leadTime: v })}
+                      />
+                    </div>
+                  )
+                })()}
 
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                   <div>
@@ -314,12 +324,22 @@ export default function SupplierInventoryPage() {
                   ) : (
                     <span />
                   )}
-                  <Button
-                    onClick={() => saveProduct(product.id)}
-                    disabled={savingId === product.id}
-                  >
-                    {savingId === product.id ? 'Saving…' : 'Save changes'}
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="ghost"
+                      className="text-text-dark"
+                      onClick={() => setEditing(product)}
+                      disabled={savingId === product.id}
+                    >
+                      Specs &amp; all fields
+                    </Button>
+                    <Button
+                      onClick={() => saveProduct(product)}
+                      disabled={savingId === product.id}
+                    >
+                      {savingId === product.id ? 'Saving…' : 'Save changes'}
+                    </Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -332,8 +352,22 @@ export default function SupplierInventoryPage() {
         onOpenChange={(open) => {
           if (!open) setEditing(null)
         }}
-        onSaved={loadProducts}
+        onSaved={replaceProduct}
       />
     </div>
+  )
+}
+
+/** "185 g · 5.5 oz · 58" · 100% Cotton", from the promoted columns or the attribute fallback. */
+function SpecLine({ product }: { product: ProductWithRelations }) {
+  const gsm = getGsmLabelShort(product)
+  const width = getWidth(product)
+  const composition = getComposition(product)
+  const parts = [gsm, width ? `${width}"` : null, composition].filter(Boolean)
+  if (parts.length === 0) return null
+  return (
+    <p className="mt-1 font-mono text-[10px] uppercase tracking-widest text-text-dark-secondary">
+      {parts.join(' · ')}
+    </p>
   )
 }

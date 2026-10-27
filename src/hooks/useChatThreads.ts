@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useCounterparties } from '@/hooks/useCounterparties'
+import { fetchInquiryListRows, messagePreview } from '@/lib/inquiry-list'
 
 interface ThreadRow {
   id: string
@@ -10,6 +10,9 @@ interface ThreadRow {
   buyerId: string
   supplierName: string | null
   itemCount: number
+  itemTitles: string[]
+  lastMessage: string | null
+  unreadCount: number
 }
 
 export interface ChatThreadSummary {
@@ -19,6 +22,10 @@ export interface ChatThreadSummary {
   /** The other party, from whichever side the reader is on. */
   counterpartName: string
   itemCount: number
+  itemTitles: string[]
+  /** One-line preview of the latest message, if any. */
+  lastMessage: string | null
+  unreadCount: number
 }
 
 /**
@@ -50,39 +57,29 @@ export function useChatThreads(enabled: boolean) {
     }
     setLoading(true)
 
-    const column = role === 'buyer' ? 'buyer_id' : 'supplier_id'
-    const { data, error } = await supabase
-      .from('inquiries')
-      .select('id, status, updated_at, buyer_id, supplier:suppliers(brand_name), items:inquiry_items(count)')
-      .eq(column, user.id)
-      .order('updated_at', { ascending: false })
-      .limit(40)
-
-    if (error) {
+    // get_inquiry_list_rows is SECURITY INVOKER: RLS already limits it to the
+    // inquiries this user is party to, from either side.
+    let data: Awaited<ReturnType<typeof fetchInquiryListRows>>
+    try {
+      data = await fetchInquiryListRows(40)
+    } catch {
       setRows([])
       setLoading(false)
       return
     }
 
     setRows(
-      (data ?? []).map((row) => {
-        const r = row as unknown as {
-          id: string
-          status: string
-          updated_at: string
-          buyer_id: string
-          supplier: { brand_name: string } | null
-          items: { count: number }[]
-        }
-        return {
-          id: r.id,
-          status: r.status,
-          updatedAt: r.updated_at,
-          buyerId: r.buyer_id,
-          supplierName: r.supplier?.brand_name ?? null,
-          itemCount: r.items?.[0]?.count ?? 0,
-        }
-      }),
+      data.map((r) => ({
+        id: r.id,
+        status: r.status,
+        updatedAt: r.last_message_at ?? r.updated_at,
+        buyerId: r.buyer_id,
+        supplierName: r.supplier_name,
+        itemCount: r.item_count,
+        itemTitles: r.item_titles,
+        lastMessage: r.last_message ? messagePreview(r.last_message, 70) : null,
+        unreadCount: r.unread_count,
+      })),
     )
     setLoading(false)
   }, [user, role])
@@ -101,6 +98,9 @@ export function useChatThreads(enabled: boolean) {
         counterpartName:
           role === 'buyer' ? (r.supplierName ?? 'Supplier') : nameOf(r.buyerId, 'Buyer'),
         itemCount: r.itemCount,
+        itemTitles: r.itemTitles,
+        lastMessage: r.lastMessage,
+        unreadCount: r.unreadCount,
       })),
     [rows, role, nameOf],
   )

@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { TrendChart, type TrendPoint } from '@/components/shared/TrendChart'
 import { useProfile } from '@/hooks/useProfile'
-import { subscribePresence, type PresenceEntry } from '@/lib/track'
+import { getSessionId, subscribePresence, type PresenceEntry } from '@/lib/track'
 import { supabase } from '@/lib/supabase'
 import { getProductImageUrl } from '@/lib/utils'
 
@@ -58,15 +58,26 @@ export default function SupplierAnalyticsPage() {
   const [responseStats, setResponseStats] = useState({ rate: 0, medianMinutes: 0 })
   const [liveVisitors, setLiveVisitors] = useState<PresenceEntry[]>([])
 
-  // Live visitors on this supplier's catalogue/product pages.
+  // Live visitors on this supplier's catalogue/product pages. Staff and the
+  // supplier's own browsing are not visitors (#39), matching the stored stats.
+  const ownCompany = profile?.company_name ?? profile?.full_name ?? null
   useEffect(() => {
     if (!profile?.id) return
     const supplierId = profile.id
+    const ownSession = getSessionId()
     const unsubscribe = subscribePresence((entries) => {
-      setLiveVisitors(entries.filter((entry) => entry.supplierId === supplierId))
+      setLiveVisitors(
+        entries.filter(
+          (entry) =>
+            entry.supplierId === supplierId &&
+            entry.session !== ownSession &&
+            entry.role !== 'admin' &&
+            !(entry.role === 'supplier' && ownCompany && entry.company === ownCompany),
+        ),
+      )
     })
     return unsubscribe
-  }, [profile?.id])
+  }, [profile?.id, ownCompany])
 
   useEffect(() => {
     if (!profile?.id) return

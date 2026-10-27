@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { motion, useInView } from 'framer-motion'
 import { ArrowUpRight, ArrowRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { extraBadgeLabel, pluralize } from '@/lib/text'
 import type { SupplierWithCount } from '@/types/app'
 
 interface VendorsSectionProps {
@@ -28,9 +29,9 @@ function SupplierCard({ supplier, index, inView }: { supplier: SupplierWithCount
             <h3 className="font-display text-base font-semibold text-text-dark transition-colors group-hover:text-accent leading-tight">
               {supplier.brand_name}
             </h3>
-            {supplier.badge_label && (
+            {extraBadgeLabel(supplier.badge_label) && (
               <p className="mt-1 font-mono text-[9px] uppercase tracking-[0.16em] text-text-dark-secondary">
-                {supplier.badge_label}
+                {extraBadgeLabel(supplier.badge_label)}
               </p>
             )}
           </div>
@@ -41,7 +42,7 @@ function SupplierCard({ supplier, index, inView }: { supplier: SupplierWithCount
 
         <div className="mt-4 flex items-center justify-between">
           <p className="font-mono text-[9px] uppercase tracking-[0.18em] text-text-dark-secondary">
-            {supplier.product_count ?? 0} fabrics
+            {pluralize(supplier.product_count ?? 0, 'fabric')}
           </p>
           {supplier.is_verified && (
             <span className="font-mono text-[8px] uppercase tracking-widest text-accent">

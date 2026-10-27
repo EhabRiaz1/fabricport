@@ -16,11 +16,13 @@ import { supabase } from '@/lib/supabase'
 import { usePagePresence } from '@/lib/track'
 import { useProducts } from '@/hooks/useProducts'
 import { useSuppliers } from '@/hooks/useSuppliers'
+import { PageMeta } from '@/components/shared/PageMeta'
 
 export default function HomePage() {
   usePagePresence({ path: '/' })
   const { products } = useProducts({ limit: 14 })
-  const { suppliers } = useSuppliers({ verifiedOnly: true, skipProductCounts: true })
+  // Mills with no public published fabric are not shown or counted (fix-list #17).
+  const { suppliers } = useSuppliers({ verifiedOnly: true, requireProducts: true })
   const [totals, setTotals] = useState<{ fabrics: number | null; meters: number | null }>({
     fabrics: null,
     meters: null,
@@ -33,8 +35,13 @@ export default function HomePage() {
         supabase
           .from('products')
           .select('id', { count: 'exact', head: true })
-          .eq('status', 'published'),
-        supabase.from('products').select('stock_meters').eq('status', 'published'),
+          .eq('status', 'published')
+          .eq('visibility', 'public'),
+        supabase
+          .from('products')
+          .select('stock_meters')
+          .eq('status', 'published')
+          .eq('visibility', 'public'),
       ])
       if (cancelled) return
       const meters = (stockRes.data ?? []).reduce(
@@ -73,6 +80,7 @@ export default function HomePage() {
 
   return (
     <div className="bg-background">
+      <PageMeta path="/" />
       <AtelierChrome />
       <PublicNav />
 

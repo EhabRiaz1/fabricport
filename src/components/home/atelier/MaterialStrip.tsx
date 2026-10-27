@@ -4,16 +4,11 @@ import { ArrowLeft, ArrowRight } from 'lucide-react'
 import { prefersReducedMotion } from '@/lib/gsap'
 import { useWheelPassThrough } from '@/hooks/useWheelPassThrough'
 import { getProductImageUrl } from '@/lib/utils'
+import { getGsmLabelShort, getWidth } from '@/lib/product-specs'
 import type { ProductWithRelations } from '@/types/app'
 
 export interface MaterialStripProps {
   products: ProductWithRelations[]
-}
-
-function getSpec(product: ProductWithRelations, slug: string): string | null {
-  const match = product.attributes?.find((attr) => attr.attribute?.slug === slug)
-  if (!match) return null
-  return match.value_text ?? (match.value_number != null ? String(match.value_number) : null)
 }
 
 const HINT_KEY = 'fp-rack-hint'
@@ -281,8 +276,10 @@ export function MaterialStrip({ products }: MaterialStripProps) {
               const image = product.images[0]
                 ? getProductImageUrl(product.images[0], { variant: 'medium' })
                 : null
-              const gsm = getSpec(product, 'weight-before-wash') ?? getSpec(product, 'gsm')
-              const width = getSpec(product, 'width-inches') ?? getSpec(product, 'width')
+              // Shared spec readers: promoted columns first, legacy attribute text second,
+              // and units are added exactly once (the old local reader printed "301 GSM gsm").
+              const gsm = getGsmLabelShort(product)
+              const width = getWidth(product)
 
               return (
                 <Link
@@ -326,7 +323,7 @@ export function MaterialStrip({ products }: MaterialStripProps) {
                     <div className="absolute left-4 top-4 flex gap-2 opacity-0 transition-opacity duration-300 group-hover:opacity-100">
                       {gsm && (
                         <span className="bg-[#140A04]/85 px-2.5 py-1 font-mono text-[9px] uppercase tracking-widest text-[#E8A070]">
-                          {gsm} gsm
+                          {gsm}
                         </span>
                       )}
                       {width && (

@@ -23,6 +23,9 @@ import { COLOR_FAMILIES, type ColorFamily } from '@/lib/color/classify'
 import { marketplaceReveal, marketplaceRevealDelayed } from '@/lib/motion'
 import { usePagePresence } from '@/lib/track'
 import { supabase } from '@/lib/supabase'
+import { cleanFacetValue } from '@/lib/product-filters'
+import { pluralize } from '@/lib/text'
+import { PageMeta } from '@/components/shared/PageMeta'
 import { usePreferencesStore } from '@/stores/preferences'
 import type {
   FabricFilterOption,
@@ -91,7 +94,7 @@ export default function MarketplacePage() {
     totalMeters: number
     totalPublished: number
   }>({ bySupplier: {}, byCategory: {}, byColor: {}, bySpec: {}, totalMeters: 0, totalPublished: 0 })
-  const [fxRate, setFxRate] = useState(278)
+  const [fxRate, setFxRate] = useState<number | null>(null)
   const { currency, unit } = usePreferencesStore()
   const {
     products,
@@ -152,8 +155,10 @@ export default function MarketplacePage() {
 
         const facets = (row.spec_facets ?? {}) as Record<string, string | string[]>
         for (const [facet, value] of Object.entries(facets)) {
-          if (Array.isArray(value)) for (const v of value) tally(facet, v)
-          else if (value) tally(facet, value)
+          for (const v of Array.isArray(value) ? value : [value]) {
+            const clean = cleanFacetValue(v)
+            if (clean) tally(facet, clean)
+          }
         }
       }
       setFacetCounts({
@@ -165,6 +170,7 @@ export default function MarketplacePage() {
         totalPublished: rows.length,
       })
 
+      // Categories with no public published fabric are hidden by FilterPanel (unless selected).
       setCategories(
         (categoriesRes.data ?? []).map((category) => ({
           slug: category.slug,
@@ -177,15 +183,20 @@ export default function MarketplacePage() {
     loadFacets()
   }, [])
 
+  // Mills with no public published fabric are left out of the filter and the mill count;
+  // a selected one stays so the filter can still be undone.
   const supplierOptions = useMemo<FabricFilterOption[]>(
     () =>
-      suppliers.map((supplier) => ({
-        slug: supplier.slug,
-        label: supplier.brand_name,
-        count: facetCounts.bySupplier[supplier.id] ?? 0,
-      })),
-    [suppliers, facetCounts.bySupplier],
+      suppliers
+        .map((supplier) => ({
+          slug: supplier.slug,
+          label: supplier.brand_name,
+          count: facetCounts.bySupplier[supplier.id] ?? 0,
+        }))
+        .filter((option) => option.count > 0 || option.slug === filters.supplierSlug),
+    [suppliers, facetCounts.bySupplier, filters.supplierSlug],
   )
+  const millCount = supplierOptions.filter((option) => (option.count ?? 0) > 0).length
 
   const refreshingResults = loading && products.length > 0
   const showResultsLoading = filtersPending || refreshingResults
@@ -209,10 +220,10 @@ export default function MarketplacePage() {
       },
       {
         kicker: 'Direct from the source',
-        text: `${supplierOptions.length} verified Pakistani mills. No brokers, no middlemen, no surprises.`,
+        text: `${pluralize(millCount, 'verified Pakistani mill')}. No brokers, no middlemen, no surprises.`,
       },
     ],
-    [facetCounts.totalMeters, supplierOptions.length],
+    [facetCounts.totalMeters, millCount],
   )
 
   function scrollToGrid() {
@@ -238,7 +249,12 @@ export default function MarketplacePage() {
   }, [hasMore, loadingMore, loading, loadMore])
 
   return (
-    <div className="min-h-screen bg-[#F6F1E9]">
+    <div className="min-h-screen overflow-x-clip bg-[#F6F1E9]">
+      <PageMeta
+        title="Fabric marketplace"
+        description="Browse surplus and running fabrics from verified Pakistani mills. Filter by composition, GSM, width, weave and colour, see live stock, and inquire direct."
+        path="/marketplace"
+      />
       <motion.div
         initial="hidden"
         animate="visible"
@@ -249,7 +265,7 @@ export default function MarketplacePage() {
 
       <ArchiveHero
         totalFabrics={facetCounts.totalPublished || total}
-        totalMills={supplierOptions.length}
+        totalMills={millCount}
         totalMeters={facetCounts.totalMeters}
       />
 
@@ -356,14 +372,14 @@ export default function MarketplacePage() {
                     onChange={(event) =>
                       patch({ search: event.target.value || undefined })
                     }
-                    placeholder="Fabric name…"
+                    placeholder="Fabric, mill, fibre, weave, colour…"
                     aria-label="Search fabrics"
                     className="h-9 border-[#C8C4BC] bg-transparent pl-9 text-[13px] text-[#2C1A0E]"
                   />
                 </label>
 
                 <p className="shrink-0 font-display text-base font-semibold tracking-tight text-[#2C1A0E]">
-                  {loading && products.length === 0 ? 'Catalogue' : `${total || products.length} fabrics`}
+                  {loading && products.length === 0 ? 'Catalogue' : pluralize(total || products.length, 'fabric')}
                 </p>
                 <ActiveFilterChips
                   filters={filters}
@@ -373,9 +389,10 @@ export default function MarketplacePage() {
                 />
               </div>
 
-              <div className="flex shrink-0 items-center gap-3">
+              {/* Wraps under the search row on narrow phones instead of pushing the page sideways. */}
+              <div className="flex min-w-0 max-w-full flex-wrap items-center gap-3">
                 <div className="flex items-center border border-[#C8C4BC] bg-[#E8E4DC]">
-                  <span className="flex items-center gap-1.5 border-r border-[#C8C4BC] px-3 py-2.5 font-mono text-[9px] uppercase tracking-[0.18em] text-[#3C2A1A]/50">
+                  <span className="hidden items-center gap-1.5 border-r sm:flex border-[#C8C4BC] px-3 py-2.5 font-mono text-[9px] uppercase tracking-[0.18em] text-[#3C2A1A]/50">
                     <ArrowUpDown className="h-3 w-3" />
                     Sort
                   </span>
@@ -572,7 +589,7 @@ export default function MarketplacePage() {
               onClick={() => setFilterSheetOpen(false)}
               className="w-full bg-[#2C1A0E] py-3 font-mono text-[10px] uppercase tracking-[0.18em] text-[#E8E4DC] transition-colors hover:bg-[#3C2A1A]"
             >
-              Show {total || products.length} fabrics
+              Show {pluralize(total || products.length, 'fabric')}
             </button>
           </div>
         </SheetContent>

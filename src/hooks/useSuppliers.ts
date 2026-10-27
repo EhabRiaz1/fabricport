@@ -30,19 +30,27 @@ export interface UseSuppliersOptions {
   enabled?: boolean
   /** Skip extra query that counts every published product (marketplace filters). */
   skipProductCounts?: boolean
+  /**
+   * Drop suppliers with no public published fabric. A mill with nothing to show is not
+   * something to promote on /vendors or count as a "verified mill". Implies counting.
+   */
+  requireProducts?: boolean
 }
 
 export async function fetchSuppliers(
   options: UseSuppliersOptions = {},
 ): Promise<SupplierWithCount[]> {
-  const { verifiedOnly = false, limit, skipProductCounts = false } = options
+  const { verifiedOnly = false, limit, requireProducts = false } = options
+  const skipProductCounts = options.skipProductCounts && !requireProducts
 
   let query = supabase
     .from('suppliers')
     .select('*, profile:profiles(*)')
     .order('brand_name', { ascending: true })
   if (verifiedOnly) query = query.eq('is_verified', true)
-  if (limit) query = query.limit(limit)
+  // The limit applies after the empty mills are dropped, so it is pushed down only when
+  // nothing is going to be filtered out.
+  if (limit && !requireProducts) query = query.limit(limit)
 
   const { data, error } = await query
   if (error) throw new Error(error.message)
@@ -51,7 +59,10 @@ export async function fetchSuppliers(
   if (skipProductCounts) {
     return suppliers.map((s) => ({ ...s, product_count: 0 }))
   }
-  return attachProductCounts(suppliers)
+  const counted = await attachProductCounts(suppliers)
+  if (!requireProducts) return counted
+  const withProducts = counted.filter((s) => s.product_count > 0)
+  return limit ? withProducts.slice(0, limit) : withProducts
 }
 
 export async function fetchSupplierBySlug(
@@ -71,7 +82,13 @@ export async function fetchSupplierBySlug(
 }
 
 export function useSuppliers(options: UseSuppliersOptions = {}) {
-  const { verifiedOnly = false, limit, enabled = true, skipProductCounts = false } = options
+  const {
+    verifiedOnly = false,
+    limit,
+    enabled = true,
+    skipProductCounts = false,
+    requireProducts = false,
+  } = options
   const [suppliers, setSuppliers] = useState<SupplierWithCount[]>([])
   const [loading, setLoading] = useState(enabled)
   const [error, setError] = useState<string | null>(null)
@@ -81,7 +98,7 @@ export function useSuppliers(options: UseSuppliersOptions = {}) {
     setError(null)
 
     try {
-      const data = await fetchSuppliers({ verifiedOnly, limit, skipProductCounts })
+      const data = await fetchSuppliers({ verifiedOnly, limit, skipProductCounts, requireProducts })
       setSuppliers(data)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load suppliers')
@@ -89,7 +106,7 @@ export function useSuppliers(options: UseSuppliersOptions = {}) {
     } finally {
       setLoading(false)
     }
-  }, [verifiedOnly, limit, skipProductCounts])
+  }, [verifiedOnly, limit, skipProductCounts, requireProducts])
 
   useEffect(() => {
     if (!enabled) {

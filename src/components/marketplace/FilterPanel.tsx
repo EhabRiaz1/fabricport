@@ -23,7 +23,7 @@ const SPEC_GROUPS: {
   open?: boolean
 }[] = [
   { facet: 'fibre_families', filterKey: 'fibres', label: 'Composition', open: true },
-  { facet: 'type', filterKey: 'fabricTypes', label: 'Fabric type', open: true },
+  { facet: 'type', filterKey: 'fabricTypes', label: 'Availability', open: true },
   { facet: 'pattern', filterKey: 'patterns', label: 'Pattern' },
   { facet: 'weave', filterKey: 'weaves', label: 'Weave' },
   { facet: 'knit_type', filterKey: 'knitTypes', label: 'Knit type' },
@@ -72,6 +72,13 @@ export function FilterPanel({
   specCounts,
   className,
 }: FilterPanelProps) {
+  // Options with nothing behind them are hidden; a selected one stays so it can be undone.
+  const visibleCategories = categories.filter(
+    (category) => (category.count ?? 0) > 0 || category.slug === filters.categorySlug,
+  )
+  const visibleSuppliers = suppliers.filter(
+    (supplier) => (supplier.count ?? 0) > 0 || supplier.slug === filters.supplierSlug,
+  )
   const selectedColors = filters.colorFamilies ?? []
   // Families with no published fabric are noise, not information.
   const visibleColors = COLOR_FAMILIES.filter(
@@ -95,14 +102,14 @@ export function FilterPanel({
         )}
       </div>
 
-      <FacetGroup label="Category" open count={categories.length}>
+      <FacetGroup label="Category" open count={visibleCategories.length}>
         <ul className="flex flex-col">
           <FacetRow
             label="All fabrics"
             selected={!filters.categorySlug}
             onSelect={() => onPatch({ categorySlug: undefined })}
           />
-          {categories.map((category) => (
+          {visibleCategories.map((category) => (
             <FacetRow
               key={category.slug}
               label={category.label}
@@ -172,14 +179,14 @@ export function FilterPanel({
       </FacetGroup>
 
       {/* Collapsed by default once the list is long enough to dominate the rail. */}
-      <FacetGroup label="Supplier" open={suppliers.length <= 8} count={suppliers.length}>
+      <FacetGroup label="Supplier" open={visibleSuppliers.length <= 8} count={visibleSuppliers.length}>
         <ul className="flex flex-col">
           <FacetRow
             label="All suppliers"
             selected={!filters.supplierSlug}
             onSelect={() => onPatch({ supplierSlug: undefined })}
           />
-          {suppliers.map((supplier) => (
+          {visibleSuppliers.map((supplier) => (
             <FacetRow
               key={supplier.slug}
               label={supplier.label}
@@ -236,7 +243,7 @@ export function FilterPanel({
         const options = Array.from(
           new Set([...Object.keys(counts), ...selected]),
         ).sort((a, b) => (counts[b] ?? 0) - (counts[a] ?? 0) || a.localeCompare(b))
-        // Fabric type also carries the Running fabric toggle, so it renders even when empty.
+        // Availability also carries the Running fabric toggle, so it renders even when empty.
         const isType = group.facet === 'type'
         if (options.length === 0 && !isType) return null
 
